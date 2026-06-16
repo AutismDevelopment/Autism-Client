@@ -82,7 +82,6 @@ public class AutismClipboardHelper {
         try {
             String base64 = Minecraft.getInstance().keyboardHandler.getClipboard();
             if (base64 == null || base64.trim().isEmpty()) {
-                AutismClientAddon.LOG.warn("[Autism] Macro clipboard is empty");
                 return null;
             }
 
@@ -91,28 +90,25 @@ public class AutismClipboardHelper {
             CompoundTag rootTag = NbtIo.readCompressed(inputStream, NbtAccounter.unlimitedHeap());
 
             int version = rootTag.getIntOr("version", 0);
-            if (version != CLIPBOARD_VERSION) {
-                AutismClientAddon.LOG.error("[Autism] Unsupported macro clipboard version: {}", version);
-                return null;
-            }
-
             String type = rootTag.getStringOr("type", "");
-            if (!MACRO_CLIPBOARD_TYPE.equals(type)) {
-                AutismClientAddon.LOG.warn("[Autism] Clipboard data is not a Autism macro payload");
-                return null;
-            }
 
-            CompoundTag macroTag = rootTag.getCompound("macro").orElse(new CompoundTag());
-            if (macroTag.isEmpty()) {
-                AutismClientAddon.LOG.warn("[Autism] Macro clipboard payload was empty");
-                return null;
+            if (version == CLIPBOARD_VERSION && MACRO_CLIPBOARD_TYPE.equals(type)) {
+                CompoundTag macroTag = rootTag.getCompound("macro").orElse(new CompoundTag());
+                if (!macroTag.isEmpty()) {
+                    return new AutismMacro().fromTag(macroTag).sanitizeForSharing();
+                }
             }
+        } catch (Exception ignored) {}
 
-            return new AutismMacro().fromTag(macroTag).sanitizeForSharing();
-        } catch (Exception e) {
-            AutismClientAddon.LOG.error("[Autism] Failed to paste macro from clipboard", e);
-            return null;
+        // Legacy fallback
+        AutismMacro legacy = AutismLegacyMacroImporter.importFromClipboard();
+        if (legacy != null) {
+            AutismClientAddon.LOG.info("[Autism] Imported macro via legacy format: {}", legacy.name);
+            return legacy;
         }
+
+        AutismClientAddon.LOG.warn("[Autism] Clipboard does not contain a valid macro");
+        return null;
     }
 
     public static boolean copyMacroStepsToClipboard(List<MacroAction> actions) {
