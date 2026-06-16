@@ -313,9 +313,6 @@ public class AutismLegacyMacroImporter {
         }
     }
 
-    /**
-     * Debug: log the structure of a tag to help identify unknown formats
-     */
     private static void logTagStructure(CompoundTag tag, String prefix) {
         if (tag == null) {
             AutismClientAddon.LOG.debug("[LegacyImporter] {} = null", prefix);
