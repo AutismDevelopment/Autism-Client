@@ -63,6 +63,8 @@ public final class AutismConfig {
     public boolean protectorStripServerPacks = false;
 
     public boolean protectorChatSigningOff = false;
+
+    public boolean protectorCrashGuard = true;
     public boolean performanceDebug = false;
     public boolean inventoryMove = false;
     public boolean xCarry = true;

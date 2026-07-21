@@ -104,6 +104,10 @@ public final class AutismProtector {
         return state().skipChatSigning;
     }
 
+    public static boolean shouldGuardCrashPackets() {
+        return state().guardCrashPackets;
+    }
+
     public static void refreshRuntimeState() {
         runtimeState = buildRuntimeState();
         runtimeStateExpiresAt = System.nanoTime() + STATE_REFRESH_NANOS;
@@ -138,7 +142,10 @@ public final class AutismProtector {
             !overlap && config.protectorBlockLocalUrls,
             !overlap && config.protectorIsolatePackCache,
             config.protectorStripServerPacks,
-            config.protectorChatSigningOff
+            config.protectorChatSigningOff,
+            // Not overlap-gated: a crash guard is cheap and worth keeping even alongside another protector, and
+            // AutismMixinPlugin likewise keeps non-overlap security mixins applied under exploitpreventer.
+            config.protectorCrashGuard
         );
     }
 
@@ -151,10 +158,11 @@ public final class AutismProtector {
         boolean blockLocalUrls,
         boolean isolatePackCache,
         boolean stripServerPacks,
-        boolean skipChatSigning
+        boolean skipChatSigning,
+        boolean guardCrashPackets
     ) {
         static RuntimeState inactive() {
-            return new RuntimeState(false, false, false, false, false, false, false, false, false);
+            return new RuntimeState(false, false, false, false, false, false, false, false, false, false);
         }
     }
 

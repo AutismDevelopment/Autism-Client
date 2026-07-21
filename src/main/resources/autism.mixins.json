@@ -164,6 +164,7 @@
     "security.AutismProtectorResourceLoaderImplMixin",
     "security.AutismProtectorPacketProcessorMixin",
     "security.AutismProtectorPacketDecoderMixin",
+    "security.AutismProtectorPacketCrashGuardMixin",
     "security.AutismRegistryDataCollectorMixin",
     "security.AutismItemPropertiesMixin",
     "security.AutismDataComponentInitializerMixin",
