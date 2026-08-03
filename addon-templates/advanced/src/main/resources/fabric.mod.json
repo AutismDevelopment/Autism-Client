@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "autism-advanced-addon-template",
+  "version": "${version}",
+  "name": "AUTISM Advanced",
+  "description": "Reference addon for AUTISM Client: a module, macro action, preset, condition, command, HUD element, and event hook.",
+  "authors": [
+    "You"
+  ],
+  "custom": {
+    "autism:color": "255,80,80",
+    "modmenu": {
+      "parent": {
+        "id": "autism"
+      }
+    }
+  },
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.example.addon.ExampleInit"
+    ],
+    "autism": [
+      "com.example.addon.ExampleAddon"
+    ]
+  },
+  "mixins": [
+    "autism-advanced-addon-template.mixins.json"
+  ],
+  "depends": {
+    "java": ">=25",
+    "minecraft": "${mc_compat}",
+    "fabricloader": ">=0.19.3",
+    "fabric-api": ">=${fabric_api_version}",
+    "autism": ">=${autism_api_version}"
+  }
+}
