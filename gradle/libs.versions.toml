@@ -1,0 +1,19 @@
+[versions]
+mod-version = "5.0"
+
+minecraft = "26.2"
+fabric-loader = "0.19.3"
+fabric-api = "0.152.2+26.2"
+lithium = "mc26.2-0.25.0-fabric"
+
+loom = "1.17.11"
+
+[libraries]
+
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
+lithium = { module = "maven.modrinth:lithium", version.ref = "lithium" }
+
+[plugins]
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }

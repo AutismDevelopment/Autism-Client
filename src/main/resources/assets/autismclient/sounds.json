@@ -1,0 +1,12 @@
+{
+  "gui.main_menu_click": {
+    "sounds": [
+      "autismclient:gui/main_menu_click"
+    ]
+  },
+  "hitsound": {
+    "sounds": [
+      "autismclient:hit3"
+    ]
+  }
+}

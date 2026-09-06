@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # NOTE: the build needs the AUTISM Client API artifact (com.autismclient:autism) to be resolvable.
+      # mavenLocal() is empty on a fresh CI runner, so make it available one of these ways:
+      #   - publish AUTISM to a maven repo your build.gradle.kts lists (GitHub Packages, a maven server), or
+      #   - commit the AUTISM jar into a `libs/` folder and add `flatDir { dirs("libs") }` to repositories.
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-jar
+          path: build/libs/*.jar
+
+      - name: Release dev build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Dev Build
+          prerelease: true
+          files: build/libs/*.jar

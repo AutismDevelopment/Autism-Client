@@ -1,0 +1,23 @@
+# In this repo these are auto-synced from the client: run `gradlew syncAddonTemplateVersions` (it also runs
+# on publishToMavenLocal), which pins minecraft/fabric-loader/fabric-api/loom/autism to the client's
+# gradle/libs.versions.toml. In a copied-out addon, set them to the AUTISM Client release you build against.
+[versions]
+mod-version = "1.0.0"
+
+minecraft = "26.2"
+fabric-loader = "0.19.3"
+fabric-api = "0.152.2+26.2"
+# The AUTISM Client release you compile against. The generated fabric.mod.json depends on `>=` this version, so a
+# built addon keeps loading on newer hosts in the same major line (the API-version handshake gates real breaks).
+autism = "5.0"
+
+loom = "1.17.11"
+
+[libraries]
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
+autism = { module = "com.autismclient:autism", version.ref = "autism" }
+
+[plugins]
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }
