@@ -97,29 +97,29 @@ public class MacroExecutor {
 
     private static final java.util.concurrent.ConcurrentHashMap<Long, RunState> RUNS_BY_ID = new java.util.concurrent.ConcurrentHashMap<>();
     private static final AtomicLong RUN_STATE_REVISION = new AtomicLong();
-    private static final ThreadLocal<RunState> CURRENT_RUN = new ThreadLocal<>();
+    static final ThreadLocal<RunState> CURRENT_RUN = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> SUPPRESS_POST_GUI_AFTER = ThreadLocal.withInitial(() -> false);
     private static volatile RunState primaryRun = null;
     private static volatile boolean visibleRunActive;
     private static AutismMacro currentMacro = null;
     private static Thread macroThread = null;
 
-    private static final AtomicReference<String> lastReceivedPacket = new AtomicReference<>("");
+    static final AtomicReference<String> lastReceivedPacket = new AtomicReference<>("");
     private static String currentStatus = "";
 
     private static volatile int currentStepIndex = -1;
     private static volatile int totalSteps = 0;
 
-    private static final AtomicBoolean isWaitingForPacket = new AtomicBoolean(false);
-    private static final AtomicReference<String> waitingPacketName = new AtomicReference<>("");
-    private static final Object packetWaitLock = new Object();
+    static final AtomicBoolean isWaitingForPacket = new AtomicBoolean(false);
+    static final AtomicReference<String> waitingPacketName = new AtomicReference<>("");
+    static final Object packetWaitLock = new Object();
 
-    private static final AtomicBoolean isWaitingForChat = new AtomicBoolean(false);
+    static final AtomicBoolean isWaitingForChat = new AtomicBoolean(false);
     static final AtomicReference<String> waitingChatPattern = new AtomicReference<>("");
     static final AtomicBoolean waitingChatIsRegex = new AtomicBoolean(false);
     static final AtomicReference<String> waitingChatPatternJson = new AtomicReference<>("");
     static final java.util.concurrent.atomic.AtomicInteger waitingChatFuzzyPercent = new java.util.concurrent.atomic.AtomicInteger(100);
-    private static final AtomicReference<String> lastMatchedChat = new AtomicReference<>("");
+    static final AtomicReference<String> lastMatchedChat = new AtomicReference<>("");
     static final Object recentChatLock = new Object();
     static final Deque<RecentChatMessage> recentChatMessages = new ArrayDeque<>();
     static final int MAX_RECENT_CHAT_MESSAGES = 256;
@@ -129,8 +129,8 @@ public class MacroExecutor {
     static String recentChatServerKey = "";
     static volatile String recentChatServerKeyMirror = "";
 
-    private static volatile CompletableFuture<Void> activePacketFuture = null;
-    private static volatile CompletableFuture<Void> activeChatFuture = null;
+    static volatile CompletableFuture<Void> activePacketFuture = null;
+    static volatile CompletableFuture<Void> activeChatFuture = null;
 
     private static volatile CompletableFuture<Void> activeBaritoneGoalFuture = null;
     private static final AtomicReference<RunState> BARITONE_OWNER = new AtomicReference<>();
@@ -150,7 +150,7 @@ public class MacroExecutor {
     private static final ThreadLocal<RepeatPacketContext> REPEAT_PACKET_CONTEXT = new ThreadLocal<>();
     private static final ThreadLocal<Integer> REPEAT_PACKET_SKIP = ThreadLocal.withInitial(() -> 0);
 
-    private static final class RunState {
+    static final class RunState {
         final long id;
         final AutismMacro sourceMacro;
         final AutismMacro macro;
@@ -345,7 +345,7 @@ public class MacroExecutor {
         return run != null ? run.backgroundMoves : backgroundMoves;
     }
 
-    private static void setCurrentStatus(String status) {
+    static void setCurrentStatus(String status) {
         RunState run = CURRENT_RUN.get();
         if (run != null) run.status = status == null ? "" : status;
         currentStatus = status == null ? "" : status;
@@ -1168,11 +1168,11 @@ public class MacroExecutor {
                             }
                         }
                         if (targets.isEmpty()) {
-                            if (prearmed == null) awaitPacket("");
+                            if (prearmed == null) MacroPacketWait.awaitPacket("");
                         } else {
                             for (int targetIndex = Math.min(startTarget, targets.size()); targetIndex < targets.size(); targetIndex++) {
                                 if (!isCurrentRunActive()) break;
-                                awaitPacket(targets.get(targetIndex));
+                                MacroPacketWait.awaitPacket(targets.get(targetIndex));
                             }
                         }
                         copyLastMatchedPacket(packetAction);
@@ -1470,7 +1470,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitForChatAction) {
                         WaitForChatAction wca = (WaitForChatAction) action;
                         setCurrentStatus("Waiting for chat: " + wca.pattern);
-                        if (!waitForPrearmed(wca, wca.timeoutMs)) awaitChat(wca);
+                        if (!waitForPrearmed(wca, wca.timeoutMs)) MacroPacketWait.awaitChat(wca);
                     }
                     else if (action instanceof WaitForEntityAction) {
                         WaitForEntityAction wea = (WaitForEntityAction) action;
@@ -2012,190 +2012,10 @@ public class MacroExecutor {
         }
     }
 
-    private static String normalizePacketKey(String value) {
-
-        return AutismPacketNamer.normalizePacketKey(value);
-    }
-
-    private static boolean packetKeyMatches(String normalizedExpected, String candidate) {
-        if (normalizedExpected.isEmpty() || candidate == null || candidate.isEmpty()) return false;
-
-        String normalizedCandidate = normalizePacketKey(candidate);
-        if (normalizedCandidate.isEmpty()) return false;
-        if (normalizedExpected.equals(normalizedCandidate)) return true;
-
-        if (normalizedCandidate.endsWith("packet")) {
-            String strippedCandidate = normalizedCandidate.substring(0, normalizedCandidate.length() - "packet".length());
-            if (normalizedExpected.equals(strippedCandidate)) return true;
-        }
-
-        return normalizedExpected.endsWith(normalizedCandidate) || normalizedCandidate.endsWith(normalizedExpected);
-    }
-
-    private static boolean packetNameMatches(String expected, String candidate) {
-        if (expected == null || expected.isEmpty()) return false;
-        return packetKeyMatches(normalizePacketKey(expected), candidate);
-    }
-
-    private record ParsedPacketTarget(String direction, String expectedName, String normalizedExpected) {}
-    private static final java.util.concurrent.ConcurrentHashMap<String, ParsedPacketTarget> PARSED_TARGET_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
-
-    private static final ParsedPacketTarget EMPTY_PACKET_TARGET = new ParsedPacketTarget("", "", "");
-
-    private static ParsedPacketTarget parsedPacketTarget(String target) {
-        if (target == null) return EMPTY_PACKET_TARGET;
-        if (PARSED_TARGET_CACHE.size() > 256) PARSED_TARGET_CACHE.clear();
-        return PARSED_TARGET_CACHE.computeIfAbsent(target, t -> {
-            String expectedName = WaitForPacketAction.getPacketName(t);
-            return new ParsedPacketTarget(WaitForPacketAction.getDirection(t), expectedName, normalizePacketKey(expectedName));
-        });
-    }
-
-    private static boolean matchesPacketTarget(String target, Packet<?> packet, String direction) {
-        if (packet == null) return false;
-
-        ParsedPacketTarget parsed = parsedPacketTarget(target);
-        if (!parsed.direction().isEmpty() && !parsed.direction().equalsIgnoreCase(direction)) return false;
-        if (parsed.expectedName().isEmpty()) return true;
-
-        String normalizedExpected = parsed.normalizedExpected();
-        if (packetKeyMatches(normalizedExpected, AutismPacketNamer.getFriendlyName(packet, direction))) return true;
-        if (packetKeyMatches(normalizedExpected, AutismPacketNamer.getFriendlyName(packet))) return true;
-        if (packetKeyMatches(normalizedExpected, packet.getClass().getSimpleName())) return true;
-
-        @SuppressWarnings("unchecked")
-        String fullName = AutismPacketRegistry.getName((Class<? extends Packet<?>>) packet.getClass());
-        return packetKeyMatches(normalizedExpected, fullName);
-    }
-
-    private static void awaitPacket(String target) {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            String normalizedTarget = WaitForPacketAction.normalizeTarget(target);
-            synchronized (run.packetWaitLock) {
-                run.waitingPacketName.set(normalizedTarget);
-                run.packetFuture = future;
-                run.waitingForPacket.set(true);
-            }
-            try {
-                setCurrentStatus(normalizedTarget.isEmpty()
-                    ? "Waiting for packet: Any"
-                    : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
-                waitForCondition(future);
-            } finally {
-                synchronized (run.packetWaitLock) {
-                    if (run.packetFuture == future) {
-                        run.waitingForPacket.set(false);
-                        run.waitingPacketName.set("");
-                        run.packetFuture = null;
-                    }
-                }
-            }
-            return;
-        }
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        String normalizedTarget = WaitForPacketAction.normalizeTarget(target);
-        synchronized (packetWaitLock) {
-            waitingPacketName.set(normalizedTarget);
-            lastReceivedPacket.set("");
-            activePacketFuture = future;
-            isWaitingForPacket.set(true);
-        }
-        try {
-            setCurrentStatus(normalizedTarget.isEmpty()
-                ? "Waiting for packet: Any"
-                : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
-            waitForCondition(future);
-        } finally {
-            synchronized (packetWaitLock) {
-                if (activePacketFuture == future) {
-                    isWaitingForPacket.set(false);
-                    waitingPacketName.set("");
-                    activePacketFuture = null;
-                }
-            }
-        }
-    }
-
-    private static void awaitChat(WaitForChatAction wca) {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) {
-            clearCaptureOutputs(wca);
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            run.chatFuture = future;
-            run.waitingChatAction = wca;
-            run.waitingForChat.set(true);
-            try {
-                if (wca.timeoutMs > 0) future.completeOnTimeout(null, wca.timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-                waitForCondition(future);
-                commitStagedCapture(wca);
-            } finally {
-                if (run.chatFuture == future) {
-                    run.waitingForChat.set(false);
-                    run.waitingChatAction = null;
-                    run.chatFuture = null;
-                }
-            }
-            return;
-        }
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        activeChatFuture = future;
-        isWaitingForChat.set(true);
-        waitingChatPattern.set(MacroChatText.normalizeManualText(wca.pattern));
-        waitingChatPatternJson.set(wca.patternJson == null ? "" : wca.patternJson);
-        waitingChatIsRegex.set(wca.useRegex);
-        waitingChatFuzzyPercent.set(WaitForChatAction.clampFuzzyPercent(wca.fuzzyPercent));
-        lastMatchedChat.set("");
-        try {
-            if (wca.timeoutMs > 0) future.completeOnTimeout(null, wca.timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-            waitForCondition(future);
-        } finally {
-            isWaitingForChat.set(false);
-            waitingChatPattern.set("");
-            waitingChatPatternJson.set("");
-            waitingChatIsRegex.set(false);
-            waitingChatFuzzyPercent.set(100);
-            activeChatFuture = null;
-        }
-    }
-
-    private static void awaitCaptureValueChat(CaptureValueAction action) {
-        if (action == null) return;
-        RunState run = CURRENT_RUN.get();
-        clearCaptureOutputs(action);
-        OneShotPacketListener listener = awaitReceive(packet -> {
-            ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
-            if (capture == null) return false;
-            RecentChatMessage message = new RecentChatMessage(
-                capture.sender() == null ? "" : capture.sender(),
-                capture.message() == null ? "" : capture.message(),
-                capture.displayText() == null ? "" : capture.displayText(),
-                capture.displayComponent(),
-                capture.source(),
-                System.currentTimeMillis()
-            );
-            CaptureValueAction.Preview preview = action.previewChat(message);
-            if (!preview.success()) return false;
-            if (run != null) run.stagedCaptures.put(action, preview.values());
-            else MacroVariables.setAll(preview.values());
-            return true;
-        });
-        try {
-            if (waitForFutureDone(listener.future, 0) && run != null) commitStagedCapture(action);
-        } finally {
-            listener.cancel();
-        }
-    }
-
     static CaptureListSelector.State captureSelectionState(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null) return null;
-        synchronized (run.captureSelection) {
-            return run.captureSelection.computeIfAbsent(action, a -> new CaptureListSelector.State());
-        }
+        return MacroPacketWait.captureSelectionState(action);
     }
+
 
     private record CachedSuggestions(java.util.List<String> suggestions, Object connection) {}
     private record PendingFetch(CompletableFuture<java.util.List<String>> future, Object connection) {}
@@ -2472,7 +2292,7 @@ public class MacroExecutor {
         if (action.waitForTrigger) {
             CaptureValueAction.Source source = action.source == null ? CaptureValueAction.Source.GUI_TITLE : action.source;
             setCurrentStatus("Waiting for capture: " + source.name().toLowerCase(Locale.ROOT).replace('_', ' '));
-            if (source == CaptureValueAction.Source.RECENT_CHAT) awaitCaptureValueChat(action);
+            if (source == CaptureValueAction.Source.RECENT_CHAT) MacroPacketWait.awaitCaptureValueChat(action);
             else if (source == CaptureValueAction.Source.SCOREBOARD) awaitCaptureValueScoreboard(mc, action);
             else awaitCaptureValueState(mc, action);
             return;
@@ -2592,7 +2412,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void waitForCondition(CompletableFuture<Void> future) {
+    static void waitForCondition(CompletableFuture<Void> future) {
 
         Thread t = Thread.currentThread();
         future.whenComplete((v, e) -> java.util.concurrent.locks.LockSupport.unpark(t));
@@ -3168,7 +2988,7 @@ public class MacroExecutor {
         action.matchedDirection = run.lastMatchedPacketDirection;
     }
 
-    private static void clearCaptureOutputs(MacroAction action) {
+    static void clearCaptureOutputs(MacroAction action) {
         RunState run = CURRENT_RUN.get();
         if (run == null || action == null) return;
         run.stagedCaptures.remove(action);
@@ -3357,7 +3177,7 @@ public class MacroExecutor {
         run.stagedCaptures.put(action, java.util.Map.copyOf(values));
     }
 
-    private static void commitStagedCapture(MacroAction action) {
+    static void commitStagedCapture(MacroAction action) {
         RunState run = CURRENT_RUN.get();
         if (run == null || action == null) return;
         java.util.Map<String, MacroValue> values = run.stagedCaptures.remove(action);
@@ -3401,14 +3221,14 @@ public class MacroExecutor {
         OneShotPacketListener send = null;
         OneShotPacketListener recv = null;
         if (!"S2C".equalsIgnoreCase(direction)) {
-            send = awaitSend(packet -> matchesPacketTarget(normalizedTarget, packet, "C2S"));
+            send = awaitSend(packet -> MacroPacketWait.matchesPacketTarget(normalizedTarget, packet, "C2S"));
             send.future.thenAccept(packet -> {
                 recordMatchedPacket(action, packet, "C2S");
                 matched.complete(packet);
             });
         }
         if (!"C2S".equalsIgnoreCase(direction)) {
-            recv = awaitReceive(packet -> matchesPacketTarget(normalizedTarget, packet, "S2C"));
+            recv = awaitReceive(packet -> MacroPacketWait.matchesPacketTarget(normalizedTarget, packet, "S2C"));
             recv.future.thenAccept(packet -> {
                 recordMatchedPacket(action, packet, "S2C");
                 matched.complete(packet);
@@ -4080,14 +3900,14 @@ public class MacroExecutor {
             TimedOneShotPacketListener recv = awaitTimedReceive((packet, direction, now) -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
-                    if (matchesPacketTarget(target, packet, "S2C")) return true;
+                    if (MacroPacketWait.matchesPacketTarget(target, packet, "S2C")) return true;
                 }
                 return false;
             });
             TimedOneShotPacketListener send = awaitTimedSend((packet, direction, now) -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
-                    if (matchesPacketTarget(target, packet, "C2S")) return true;
+                    if (MacroPacketWait.matchesPacketTarget(target, packet, "C2S")) return true;
                 }
                 return false;
             });
@@ -4248,14 +4068,14 @@ public class MacroExecutor {
             OneShotPacketListener recv = awaitReceive(packet -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
-                    if (matchesPacketTarget(target, packet, "S2C")) return true;
+                    if (MacroPacketWait.matchesPacketTarget(target, packet, "S2C")) return true;
                 }
                 return false;
             });
             OneShotPacketListener send = awaitSend(packet -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
-                    if (matchesPacketTarget(target, packet, "C2S")) return true;
+                    if (MacroPacketWait.matchesPacketTarget(target, packet, "C2S")) return true;
                 }
                 return false;
             });
@@ -4372,7 +4192,7 @@ public class MacroExecutor {
         return null;
     }
 
-    private static boolean waitForFutureDone(CompletableFuture<?> future, long timeoutMs) {
+    static boolean waitForFutureDone(CompletableFuture<?> future, long timeoutMs) {
         Thread t = Thread.currentThread();
         long start = System.nanoTime();
         long timeoutNanos = timeoutMs <= 0 ? Long.MAX_VALUE : timeoutMs * 1_000_000L;
@@ -4420,11 +4240,11 @@ public class MacroExecutor {
             }
             java.util.List<String> targets = packetAction.effectiveList();
             if (targets.isEmpty()) {
-                awaitPacket("");
+                MacroPacketWait.awaitPacket("");
             } else {
                 for (String target : targets) {
                     if (!isCurrentRunActive()) break;
-                    awaitPacket(target);
+                    MacroPacketWait.awaitPacket(target);
                 }
             }
             copyLastMatchedPacket(packetAction);
@@ -4511,7 +4331,7 @@ public class MacroExecutor {
         } else if (action instanceof WaitForChatAction) {
             WaitForChatAction wca = (WaitForChatAction) action;
             setCurrentStatus("Waiting for chat: " + wca.pattern);
-            awaitChat(wca);
+            MacroPacketWait.awaitChat(wca);
         } else if (action instanceof WaitForEntityAction) {
             WaitForEntityAction wea = (WaitForEntityAction) action;
             setCurrentStatus(wea.getDisplayName());
@@ -7976,7 +7796,7 @@ public class MacroExecutor {
                 if (!run.running.get() || !run.waitingForPacket.get()) continue;
                 CompletableFuture<Void> f = null;
                 synchronized (run.packetWaitLock) {
-                    if (run.waitingForPacket.get() && matchesPacketTarget(run.waitingPacketName.get(), packet, direction)) {
+                    if (run.waitingForPacket.get() && MacroPacketWait.matchesPacketTarget(run.waitingPacketName.get(), packet, direction)) {
                         run.lastMatchedPacket = packet;
                         run.lastMatchedPacketDirection = direction;
                         f = run.packetFuture;
@@ -7992,7 +7812,7 @@ public class MacroExecutor {
                 if (!isWaitingForPacket.get()) return;
 
                 String target = waitingPacketName.get();
-                if (matchesPacketTarget(target, packet, direction)) {
+                if (MacroPacketWait.matchesPacketTarget(target, packet, direction)) {
                     lastReceivedPacket.set(direction + " " + AutismPacketNamer.getFriendlyName(packet, direction));
                     f = activePacketFuture;
                 }
