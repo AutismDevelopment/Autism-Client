@@ -1,78 +1,25 @@
 package autismclient.util.macro;
 
-import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
 import autismclient.util.macro.MacroActionResources.SharedClientResource;
-import autismclient.AutismClientAddon;
-import autismclient.modules.AutismModule;
 import autismclient.modules.PackHideState;
-import autismclient.util.PacketRegenerator;
 import autismclient.util.AutismCompatManager;
 import autismclient.util.AutismClientMessaging;
-import autismclient.util.AutismCraftingHelper;
-import autismclient.util.AutismGuiActions;
 import autismclient.util.AutismInstaBreakRenderer;
-import autismclient.util.AutismInventoryClickHelper;
-import autismclient.util.AutismInventoryHelper;
 import autismclient.util.AutismMacro;
 import autismclient.util.AutismPacketNamer;
-import autismclient.util.AutismPacketRegistry;
-import autismclient.util.AutismSharedState;
-import autismclient.util.AutismAutoTool;
-import autismclient.mixin.accessor.AutismMultiPlayerGameModeAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.world.inventory.ContainerInput;
-import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.ItemStack;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.RecordComponent;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.text.Normalizer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -303,6 +250,10 @@ public class MacroExecutor {
 
     public static void stopRun(long id) {
         MacroLifecycle.stopRun(id);
+    }
+
+    static boolean hasMacroCapacity(int activeCount) {
+        return MacroLifecycle.hasMacroCapacity(activeCount);
     }
 
     static void stopCurrentActionRun() {
