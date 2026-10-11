@@ -172,11 +172,11 @@ final class MacroCaptureAutofill {
         if (action.autofillCacheList) {
             CachedSuggestions listCache = SUGGESTION_CACHE.get(query);
             if (listCache != null && listCache.connection() == connection && !listCache.suggestions().isEmpty()) {
-                MacroExecutor.setCurrentStatus("Using cached suggestions");
+                MacroLifecycle.setCurrentStatus("Using cached suggestions");
                 applyCaptureSuggestions(run, action, listCache.suggestions(), query);
                 return;
             }
-            MacroExecutor.setCurrentStatus("Sweeping command suggestions");
+            MacroLifecycle.setCurrentStatus("Sweeping command suggestions");
             java.util.List<String> all = sweepAutofillCommand(connection, query);
             if (all.isEmpty()) return;
             if (SUGGESTION_CACHE.size() >= SUGGESTION_CACHE_MAX) SUGGESTION_CACHE.clear();
@@ -191,13 +191,13 @@ final class MacroCaptureAutofill {
 
         if (cached != null) {
 
-            MacroExecutor.setCurrentStatus("Using cached suggestions");
+            MacroLifecycle.setCurrentStatus("Using cached suggestions");
             applyCaptureSuggestions(run, action, capturePool(connection, action, query, cached.suggestions()), query);
             fireSuggestionFetch(connection, query, action.autofillTimeoutMs);
             return;
         }
 
-        MacroExecutor.setCurrentStatus("Requesting command suggestions");
+        MacroLifecycle.setCurrentStatus("Requesting command suggestions");
         PendingFetch pending = fireSuggestionFetch(connection, query, action.autofillTimeoutMs);
         if (pending == null) return;
         if (!MacroRace.waitForFutureDone(pending.future(), 0)) return;
@@ -210,7 +210,7 @@ final class MacroCaptureAutofill {
         autismclient.util.AutismNameHarvest.Control control = new autismclient.util.AutismNameHarvest.Control() {
             @Override public boolean cancelled() {
                 Minecraft mc = Minecraft.getInstance();
-                return !MacroExecutor.isCurrentRunActive() || mc == null || mc.getConnection() != connection;
+                return !MacroLifecycle.isCurrentRunActive() || mc == null || mc.getConnection() != connection;
             }
             @Override public boolean paused() { return false; }
             @Override public int limit() { return MAX_SWEEP_NAMES; }
@@ -230,11 +230,11 @@ final class MacroCaptureAutofill {
         String cacheKey = " namescrape";
         CachedSuggestions cached = SUGGESTION_CACHE.get(cacheKey);
         if (cached != null && cached.connection() == connection && !cached.suggestions().isEmpty()) {
-            MacroExecutor.setCurrentStatus("Using cached names");
+            MacroLifecycle.setCurrentStatus("Using cached names");
             applyCaptureSuggestions(run, action, cached.suggestions(), "");
             return;
         }
-        MacroExecutor.setCurrentStatus("Scraping player names");
+        MacroLifecycle.setCurrentStatus("Scraping player names");
         java.util.List<String> names = scrapeAllNames(mc, connection);
         if (names.isEmpty()) return;
         if (SUGGESTION_CACHE.size() >= SUGGESTION_CACHE_MAX) SUGGESTION_CACHE.clear();
@@ -250,7 +250,7 @@ final class MacroCaptureAutofill {
         autismclient.util.AutismNameHarvest.Control control = new autismclient.util.AutismNameHarvest.Control() {
             @Override public boolean cancelled() {
                 Minecraft m = Minecraft.getInstance();
-                return !MacroExecutor.isCurrentRunActive() || m == null || m.getConnection() != connection;
+                return !MacroLifecycle.isCurrentRunActive() || m == null || m.getConnection() != connection;
             }
             @Override public boolean paused() { return false; }
             @Override public int limit() { return MAX_SWEEP_NAMES; }
@@ -267,25 +267,25 @@ final class MacroCaptureAutofill {
         String modifierError = action.numberModifierError();
         if (!modifierError.isBlank()) {
 
-            MacroExecutor.setCurrentStatus("Capture failed: " + modifierError);
+            MacroLifecycle.setCurrentStatus("Capture failed: " + modifierError);
             autismclient.util.AutismNotifications.error("Capture Value: " + modifierError);
             return;
         }
         if (action.source == CaptureValueAction.Source.COMMAND_AUTOFILL) {
-            MacroExecutor.setCurrentStatus("Requesting command suggestions");
+            MacroLifecycle.setCurrentStatus("Requesting command suggestions");
             runCaptureCommandAutofill(mc, action);
             reportMissingCapture(action);
             return;
         }
         if (action.source == CaptureValueAction.Source.NAMESCRAPE) {
-            MacroExecutor.setCurrentStatus("Scraping player names");
+            MacroLifecycle.setCurrentStatus("Scraping player names");
             runCaptureNamescrape(mc, action);
             reportMissingCapture(action);
             return;
         }
         if (action.waitForTrigger) {
             CaptureValueAction.Source source = action.source == null ? CaptureValueAction.Source.GUI_TITLE : action.source;
-            MacroExecutor.setCurrentStatus("Waiting for capture: " + source.name().toLowerCase(Locale.ROOT).replace('_', ' '));
+            MacroLifecycle.setCurrentStatus("Waiting for capture: " + source.name().toLowerCase(Locale.ROOT).replace('_', ' '));
             if (source == CaptureValueAction.Source.RECENT_CHAT) MacroPacketWait.awaitCaptureValueChat(action);
             else if (source == CaptureValueAction.Source.SCOREBOARD) awaitCaptureValueScoreboard(mc, action);
             else awaitCaptureValueState(mc, action);
@@ -296,9 +296,9 @@ final class MacroCaptureAutofill {
             new java.util.concurrent.atomic.AtomicReference<>(CaptureValueAction.Preview.unavailable("Not available"));
 
         long deadline = System.nanoTime() + MacroExecutor.CAPTURE_SETTLE_MS * 1_000_000L;
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             CompletableFuture<Void> done = new CompletableFuture<>();
-            mc.execute(() -> MacroExecutor.withRunContext(run, () -> {
+            mc.execute(() -> MacroLifecycle.withRunContext(run, () -> {
                 try {
                     result.set(action.run(mc));
                     done.complete(null);
@@ -314,7 +314,7 @@ final class MacroCaptureAutofill {
         CaptureValueAction.Preview preview = result.get();
         if (!preview.success()) {
 
-            MacroExecutor.setCurrentStatus("Capture failed: " + preview.message());
+            MacroLifecycle.setCurrentStatus("Capture failed: " + preview.message());
             autismclient.util.AutismNotifications.error(
                 "Capture " + captureOutputLabel(action) + ": " + preview.message());
         }
@@ -323,7 +323,7 @@ final class MacroCaptureAutofill {
     private static void reportMissingCapture(CaptureValueAction action) {
         String name = MacroVariableContext.cleanRootName(action.saveAs);
         if (name.isBlank() || MacroVariables.value(name).isPresent()) return;
-        MacroExecutor.setCurrentStatus("Capture failed: nothing captured");
+        MacroLifecycle.setCurrentStatus("Capture failed: nothing captured");
         autismclient.util.AutismNotifications.error(
             "Capture " + captureOutputLabel(action) + ": nothing captured");
     }
@@ -337,7 +337,7 @@ final class MacroCaptureAutofill {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
         MacroPrearm.clearCaptureOutputs(action);
         String lastMessage = "";
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             CaptureValueAction.Preview preview;
             try {
                 preview = MacroClientThread.callOnClientThread(mc, () -> action.previewCurrent(mc),
@@ -353,7 +353,7 @@ final class MacroCaptureAutofill {
             }
             if (!preview.message().isBlank() && !preview.message().equals(lastMessage)) {
                 lastMessage = preview.message();
-                MacroExecutor.setCurrentStatus("Capture waiting: " + lastMessage);
+                MacroLifecycle.setCurrentStatus("Capture waiting: " + lastMessage);
             }
             MacroExecutor.waitOneTick();
         }
@@ -368,7 +368,7 @@ final class MacroCaptureAutofill {
         String previousText = null;
         String lastMessage = "";
         boolean baselineReady = false;
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             CaptureValueAction.ScoreboardLine line;
             try {
                 String keySnapshot = trackedKey;
@@ -397,7 +397,7 @@ final class MacroCaptureAutofill {
                     }
                     if (!preview.message().isBlank() && !preview.message().equals(lastMessage)) {
                         lastMessage = preview.message();
-                        MacroExecutor.setCurrentStatus("Capture waiting: " + lastMessage);
+                        MacroLifecycle.setCurrentStatus("Capture waiting: " + lastMessage);
                     }
                     previousText = currentText;
                 }

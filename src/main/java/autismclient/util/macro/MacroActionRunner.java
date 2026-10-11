@@ -75,8 +75,8 @@ final class MacroActionRunner {
             return postGuiFuture;
         }
 
-        MacroExecutor.setCurrentStatus("Waiting target: " + action.getDisplayName());
-        while (MacroExecutor.isCurrentRunActive()) {
+        MacroLifecycle.setCurrentStatus("Waiting target: " + action.getDisplayName());
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (!canRunTargetInteractionNow(mc, action)) {
                 java.util.concurrent.locks.LockSupport.parkNanos(MacroExecutor.MACRO_WAIT_POLL_NANOS);
                 if (Thread.interrupted()) throw new InterruptedException();
@@ -172,7 +172,7 @@ final class MacroActionRunner {
     private static void waitForCurrentGuiReady(Minecraft mc) throws InterruptedException {
 
         long deadline = System.nanoTime() + 500_000_000L;
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             Boolean ready = MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.player == null || mc.gui.screen() == null) return false;
                 if (mc.player.containerMenu != null && mc.player.containerMenu != mc.player.inventoryMenu) {
@@ -206,17 +206,17 @@ final class MacroActionRunner {
     }
 
     public static void runItemActionPaced(Minecraft mc, ItemAction ia) throws InterruptedException {
-        MacroExecutor.setCurrentStatus(ia.getDisplayName());
+        MacroLifecycle.setCurrentStatus(ia.getDisplayName());
         java.util.List<Runnable> plan = MacroClientThread.callOnClientThread(mc, () -> ia.buildClickPlan(mc), java.util.Collections.<Runnable>emptyList());
         if (plan == null || plan.isEmpty()) return;
         long delayMs = Math.max(0, ia.clickDelayMs);
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
         boolean first = true;
         for (Runnable op : plan) {
-            if (!MacroExecutor.isCurrentRunActive()) break;
+            if (!MacroLifecycle.isCurrentRunActive()) break;
             if (!first && delayMs > 0) Thread.sleep(delayMs);
             first = false;
-            mc.execute(() -> MacroExecutor.withRunContext(scheduledRun, () -> {
+            mc.execute(() -> MacroLifecycle.withRunContext(scheduledRun, () -> {
                 if (PackHideState.isHardLocked()) return;
                 try {
                     op.run();
@@ -260,7 +260,7 @@ final class MacroActionRunner {
         @Override public void runOnClientThread(Runnable r) {
             if (r == null) return;
 
-            Runnable safe = () -> MacroExecutor.withRunContext(run, () -> {
+            Runnable safe = () -> MacroLifecycle.withRunContext(run, () -> {
                 try { r.run(); }
                 catch (Throwable t) { AutismClientMessaging.sendPrefixed("\u00a7cAddon action (client task) error: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage())); }
             });
@@ -272,7 +272,7 @@ final class MacroActionRunner {
             if (s == null) return null;
             java.util.function.Supplier<T> safe = () -> {
                 AtomicReference<T> value = new AtomicReference<>();
-                MacroExecutor.withRunContext(run, () -> {
+                MacroLifecycle.withRunContext(run, () -> {
                     try { value.set(s.get()); }
                     catch (Throwable t) { AutismClientMessaging.sendPrefixed("\u00a7cAddon action (client task) error: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage())); }
                 });
@@ -283,24 +283,24 @@ final class MacroActionRunner {
         }
 
         @Override public void waitTicks(int ticks) {
-            MacroExecutor.withRunContext(run, () -> {
-                for (int i = 0; i < ticks && MacroExecutor.isCurrentRunActive(); i++) {
+            MacroLifecycle.withRunContext(run, () -> {
+                for (int i = 0; i < ticks && MacroLifecycle.isCurrentRunActive(); i++) {
                     MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick());
                 }
             });
         }
 
         @Override public void awaitCondition(CompletableFuture<Void> future) {
-            if (future != null) MacroExecutor.withRunContext(run, () -> MacroRunLoop.waitForCondition(future));
+            if (future != null) MacroLifecycle.withRunContext(run, () -> MacroRunLoop.waitForCondition(future));
         }
 
         @Override public void awaitCondition(autismclient.api.macro.AddonCondition condition) {
-            if (condition != null) MacroExecutor.withRunContext(run, () -> MacroRunLoop.waitForCondition(MacroConditionRegistry.await(condition)));
+            if (condition != null) MacroLifecycle.withRunContext(run, () -> MacroRunLoop.waitForCondition(MacroConditionRegistry.await(condition)));
         }
 
         @Override public boolean isActive() { return run != null && run.running.get() && !PackHideState.isHardLocked(); }
 
-        @Override public void setStatus(String status) { MacroExecutor.withRunContext(run, () -> MacroExecutor.setCurrentStatus(status)); }
+        @Override public void setStatus(String status) { MacroLifecycle.withRunContext(run, () -> MacroLifecycle.setCurrentStatus(status)); }
 
         @Override public void sendPacket(net.minecraft.network.protocol.Packet<?> packet) {
             if (packet == null) return;
@@ -333,7 +333,7 @@ final class MacroActionRunner {
 
     public static void runUseItemPhaseAction(Minecraft mc, UseItemPhaseAction action) throws InterruptedException {
         int times = action.repeatTimes();
-        for (int i = 0; i < times && MacroExecutor.isCurrentRunActive(); i++) {
+        for (int i = 0; i < times && MacroLifecycle.isCurrentRunActive(); i++) {
 
             MacroClientThread.runOnClientThread(mc, () -> {
                 try { action.sendUsePacket(mc); }
@@ -349,7 +349,7 @@ final class MacroActionRunner {
             }
             try {
 
-                for (int t = 0; t < action.holdTicks && MacroExecutor.isCurrentRunActive(); t++) {
+                for (int t = 0; t < action.holdTicks && MacroLifecycle.isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tf = MacroConditionRegistry.waitForNextTick();
                     MacroRunLoop.waitForCondition(tf);
                 }
@@ -363,7 +363,7 @@ final class MacroActionRunner {
                     }
                 }
             }
-            if (!MacroExecutor.isCurrentRunActive()) break;
+            if (!MacroLifecycle.isCurrentRunActive()) break;
 
             MacroClientThread.runOnClientThread(mc, () -> {
                 try { action.finishRelease(mc); }
@@ -376,7 +376,7 @@ final class MacroActionRunner {
         int times = Math.max(1, action.clickCount);
 
         MacroClientThread.runOnClientThread(mc, () -> {
-            for (int c = 0; c < times && MacroExecutor.isCurrentRunActive(); c++) {
+            for (int c = 0; c < times && MacroLifecycle.isCurrentRunActive(); c++) {
                 try {
                     action.execute(mc);
                 } catch (Exception e) {
@@ -407,7 +407,7 @@ final class MacroActionRunner {
         }
 
         List<Integer> slots = MacroClientThread.callOnClientThread(mc, () -> action.collectTransferSlots(mc), List.of());
-        for (int i = 0; i < slots.size() && MacroExecutor.isCurrentRunActive(); i++) {
+        for (int i = 0; i < slots.size() && MacroLifecycle.isCurrentRunActive(); i++) {
             AutismInventoryClickHelper.click(mc, slots.get(i), 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE);
             if (i + 1 < slots.size()) waitTicks(delayTicks);
         }
@@ -418,7 +418,7 @@ final class MacroActionRunner {
     }
 
     private static void waitTicks(int ticks) {
-        for (int i = 0; i < ticks && MacroExecutor.isCurrentRunActive(); i++) {
+        for (int i = 0; i < ticks && MacroLifecycle.isCurrentRunActive(); i++) {
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
             MacroRunLoop.waitForCondition(tickFuture);
         }
@@ -439,7 +439,7 @@ final class MacroActionRunner {
                 }, action.isTickAligned());
                 if (action.holdTicks > 0) {
                     waitTicks(action.holdTicks);
-                    if (!MacroExecutor.isCurrentRunActive()) return;
+                    if (!MacroLifecycle.isCurrentRunActive()) return;
                     MacroClientThread.runOnClientThread(mc, () -> {
                         try { action.sendRelease(mc); }
                         catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in UseItem release: " + e.getMessage()); }
@@ -450,7 +450,7 @@ final class MacroActionRunner {
             }
 
             int times = Math.max(1, action.useCount);
-            for (int i = 0; i < times && MacroExecutor.isCurrentRunActive(); i++) {
+            for (int i = 0; i < times && MacroLifecycle.isCurrentRunActive(); i++) {
                 MacroClientThread.runOnClientThread(mc, () -> {
                     try {
                         if (sneaking) autismclient.util.AutismMacroSneak.forceSneak(mc, true);
@@ -459,7 +459,7 @@ final class MacroActionRunner {
                     catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in UseItem: " + e.getMessage()); }
                 }, action.isTickAligned());
                 if (action.waitForFinish) waitForUseItemFinish(mc, 0);
-                if (i + 1 < times && MacroExecutor.isCurrentRunActive()) MacroExecutor.waitOneTick();
+                if (i + 1 < times && MacroLifecycle.isCurrentRunActive()) MacroExecutor.waitOneTick();
             }
         } finally {
             if (sneaking) mc.execute(() -> autismclient.util.AutismMacroSneak.forceSneak(mc, false));
@@ -473,9 +473,9 @@ final class MacroActionRunner {
         int delay = Math.max(0, action.delayTicks);
         int total = repeats * slots.size();
         int sent = 0;
-        for (int repeat = 0; repeat < repeats && MacroExecutor.isCurrentRunActive(); repeat++) {
+        for (int repeat = 0; repeat < repeats && MacroLifecycle.isCurrentRunActive(); repeat++) {
             for (int slot : slots) {
-                if (!MacroExecutor.isCurrentRunActive()) return;
+                if (!MacroLifecycle.isCurrentRunActive()) return;
                 MacroClientThread.runOnClientThread(mc, () -> action.executeClick(mc, slot));
                 sent++;
                 if (delay > 0 && sent < total) waitTicks(delay);
@@ -488,14 +488,14 @@ final class MacroActionRunner {
         if (action.flushBefore) AutismSharedState.get().flushDelayedPackets(mc.getConnection());
         int total = action.effectiveCount();
         int delay = Math.max(0, action.delayTicks);
-        for (int i = 0; i < total && MacroExecutor.isCurrentRunActive(); i++) {
+        for (int i = 0; i < total && MacroLifecycle.isCurrentRunActive(); i++) {
             action.sendOne(mc);
             if (delay > 0 && i + 1 < total) waitTicks(delay);
         }
     }
 
     private static void waitForUseItemFinish(Minecraft mc, int fallbackTicks) throws InterruptedException {
-        if (mc == null || !MacroExecutor.isCurrentRunActive()) return;
+        if (mc == null || !MacroLifecycle.isCurrentRunActive()) return;
 
         if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc,
                 () -> mc.player != null && mc.player.isUsingItem(),
@@ -508,7 +508,7 @@ final class MacroActionRunner {
                 0);
         int maxTicks = Math.max(8, remaining > 0 ? remaining + 8 : fallbackTicks + 8);
         maxTicks = Math.min(maxTicks, 72000);
-        for (int i = 0; i < maxTicks && MacroExecutor.isCurrentRunActive(); i++) {
+        for (int i = 0; i < maxTicks && MacroLifecycle.isCurrentRunActive(); i++) {
             if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc,
                     () -> mc.player != null && mc.player.isUsingItem(),
                     Boolean.FALSE))) {

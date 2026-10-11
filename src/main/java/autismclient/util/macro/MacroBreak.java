@@ -39,7 +39,7 @@ final class MacroBreak {
         try {
             long lastAttemptTick = AutismSharedState.get().getClientTickCounter() - (delayTicks + 1L);
             long lastSneakTick = Long.MIN_VALUE;
-            while (MacroExecutor.isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
+            while (MacroLifecycle.isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
 
                 if (action.sneak) {
                     long sneakTick = AutismSharedState.get().getClientTickCounter();
@@ -53,7 +53,7 @@ final class MacroBreak {
                 boolean isAir = isInstaBreakAir(mc, target);
                 if (wasSolid && isAir) {
                     completed++;
-                    MacroExecutor.setCurrentStatus("InstaBreak " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
+                    MacroLifecycle.setCurrentStatus("InstaBreak " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
                     if (targetTimes > 0 && completed >= targetTimes) return;
                     wasSolid = false;
                 } else if (!isAir) {
@@ -91,7 +91,7 @@ final class MacroBreak {
                     }
                 }
 
-                MacroExecutor.setCurrentStatus("InstaBreak " + target.getX() + "," + target.getY() + "," + target.getZ()
+                MacroLifecycle.setCurrentStatus("InstaBreak " + target.getX() + "," + target.getY() + "," + target.getZ()
                     + " " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
 
                 Thread.sleep(1);
@@ -191,7 +191,7 @@ final class MacroBreak {
         AutismInstaBreakRenderer.setTarget(target);
         long lastTick = -1L;
         try {
-            while (MacroExecutor.isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
+            while (MacroLifecycle.isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
                 long now = AutismSharedState.get().getClientTickCounter();
                 if (now == lastTick) {
                     Thread.sleep(1);
@@ -225,13 +225,13 @@ final class MacroBreak {
                         MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
                     }
                     completed++;
-                    MacroExecutor.setCurrentStatus("Break " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
+                    MacroLifecycle.setCurrentStatus("Break " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
                     if (targetTimes > 0 && completed >= targetTimes) return;
                     started[0] = false;
                     nextStepsFired[0] = false;
                     waitForBreakSolid(mc, target);
                 } else {
-                    MacroExecutor.setCurrentStatus("Break " + target.getX() + "," + target.getY() + "," + target.getZ()
+                    MacroLifecycle.setCurrentStatus("Break " + target.getX() + "," + target.getY() + "," + target.getZ()
                         + " " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
                 }
             }
@@ -253,7 +253,7 @@ final class MacroBreak {
 
         if (plan.instant() && plan.interactFirst()) {
             runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!MacroExecutor.isCurrentRunActive()) return -1;
+            if (!MacroLifecycle.isCurrentRunActive()) return -1;
         }
 
         int result = MacroClientThread.callOnClientThread(mc, () -> startPreparedBreakOnClient(mc, action, pos, dir, started), -1, action.isTickAligned());
@@ -326,11 +326,11 @@ final class MacroBreak {
         InteractTiming timing = action.interactTiming;
         if (timing == InteractTiming.BEFORE && plan.breaksNextTick()) {
             runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!MacroExecutor.isCurrentRunActive()) return -1;
+            if (!MacroLifecycle.isCurrentRunActive()) return -1;
         }
         if (timing == InteractTiming.WITH && plan.breaksThisTick()) {
             runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!MacroExecutor.isCurrentRunActive()) return -1;
+            if (!MacroLifecycle.isCurrentRunActive()) return -1;
         }
 
         int result = MacroClientThread.callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
@@ -396,7 +396,7 @@ final class MacroBreak {
         int broke;
         if (action.interactCustomMs < 0) {
             runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!MacroExecutor.isCurrentRunActive()) return -1;
+            if (!MacroLifecycle.isCurrentRunActive()) return -1;
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
             broke = MacroClientThread.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
         } else {
@@ -475,13 +475,13 @@ final class MacroBreak {
         if (fired != null) fired[0] = true;
         action.markNextActionsRan();
         String names = actions.size() == 1 ? actions.get(0).getDisplayName() : actions.size() + " steps";
-        MacroExecutor.setCurrentStatus("Break: next " + names);
+        MacroLifecycle.setCurrentStatus("Break: next " + names);
         AutismModule module = AutismModule.get();
         boolean previousSuppressPostGui = Boolean.TRUE.equals(MacroExecutor.SUPPRESS_POST_GUI_AFTER.get());
         try {
             MacroExecutor.SUPPRESS_POST_GUI_AFTER.set(true);
             for (MacroAction next : actions) {
-                if (next == null || !next.isEnabled() || !MacroExecutor.isCurrentRunActive()) continue;
+                if (next == null || !next.isEnabled() || !MacroLifecycle.isCurrentRunActive()) continue;
                 try {
                     MacroDispatcher.executeSingleActionWithWaits(mc, next, module);
                 } catch (InterruptedException e) {
@@ -524,7 +524,7 @@ final class MacroBreak {
     }
 
     private static void waitForBreakSolid(Minecraft mc, BlockPos pos) throws InterruptedException {
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (!isInstaBreakAir(mc, pos)) return;
             Thread.sleep(1);
         }
@@ -532,7 +532,7 @@ final class MacroBreak {
 
     private static void waitBreakClientTicks(int ticks) throws InterruptedException {
         long start = AutismSharedState.get().getClientTickCounter();
-        while (MacroExecutor.isCurrentRunActive() && (AutismSharedState.get().getClientTickCounter() - start) < ticks) {
+        while (MacroLifecycle.isCurrentRunActive() && (AutismSharedState.get().getClientTickCounter() - start) < ticks) {
             Thread.sleep(1);
         }
     }
@@ -543,6 +543,6 @@ final class MacroBreak {
 
     private static void releaseMacroSneak(Minecraft mc, String mode) {
         autismclient.util.AutismMacroSneak.release(mc, mode);
-        if (!autismclient.util.AutismMacroSneak.isPacket(mode)) MacroExecutor.applyAggregateSneakState(mc);
+        if (!autismclient.util.AutismMacroSneak.isPacket(mode)) MacroLifecycle.applyAggregateSneakState(mc);
     }
 }

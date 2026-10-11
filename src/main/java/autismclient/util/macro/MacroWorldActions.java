@@ -26,7 +26,7 @@ final class MacroWorldActions {
         ItemTarget target = action.resolvedItemTarget().resolveTemplate(mc);
         if (target == null) return;
         if (action.waitForItem && target != null && (target.hasIdentity() || target.hasSlot())) {
-            MacroExecutor.setCurrentStatus("Waiting for " + describeItemTarget(target));
+            MacroLifecycle.setCurrentStatus("Waiting for " + describeItemTarget(target));
             waitForItemActionEntry(mc, target);
         }
 
@@ -66,14 +66,14 @@ final class MacroWorldActions {
     }
 
     private static void waitForItemInSpecificHandlerSlot(Minecraft mc, int slotId, ItemTarget target) throws InterruptedException {
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotMatchesItem(mc, slotId, target), Boolean.FALSE))) return;
             MacroExecutor.waitOneTick();
         }
     }
 
     private static void waitForAnyItemInSpecificHandlerSlot(Minecraft mc, int slotId) throws InterruptedException {
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotHasAnyItem(mc, slotId), Boolean.FALSE))) return;
             MacroExecutor.waitOneTick();
         }
@@ -110,7 +110,7 @@ final class MacroWorldActions {
         }
 
         if (ia.useSlot && ia.targetSlot >= 0) {
-            MacroExecutor.setCurrentStatus("Waiting for slot " + ia.targetSlot);
+            MacroLifecycle.setCurrentStatus("Waiting for slot " + ia.targetSlot);
             waitForAnyItemInSpecificHandlerSlot(mc, ia.targetSlot);
         }
     }
@@ -122,19 +122,19 @@ final class MacroWorldActions {
         int slot = resolvedTarget.hasSlot() ? resolvedTarget.slot : -1;
 
         if (slot >= 0 && resolvedTarget.hasIdentity()) {
-            MacroExecutor.setCurrentStatus("Waiting for " + itemLabel);
+            MacroLifecycle.setCurrentStatus("Waiting for " + itemLabel);
             waitForItemInSpecificHandlerSlot(mc, slot, resolvedTarget);
             return;
         }
 
         if (slot >= 0) {
-            MacroExecutor.setCurrentStatus("Waiting for slot " + slot);
+            MacroLifecycle.setCurrentStatus("Waiting for slot " + slot);
             waitForAnyItemInSpecificHandlerSlot(mc, slot);
             return;
         }
 
         if (resolvedTarget.hasIdentity()) {
-            MacroExecutor.setCurrentStatus("Waiting for item in GUI: " + itemLabel);
+            MacroLifecycle.setCurrentStatus("Waiting for item in GUI: " + itemLabel);
             CompletableFuture<Void> waitFuture = MacroConditionRegistry.waitForItemInHandler(resolvedTarget);
             MacroRunLoop.waitForCondition(waitFuture);
         }
@@ -174,7 +174,7 @@ final class MacroWorldActions {
 
     public static void runCraftAction(Minecraft mc, CraftAction craftAction) throws InterruptedException {
         if (craftAction == null || !craftAction.hasEntries()) {
-            MacroExecutor.setCurrentStatus("Crafting");
+            MacroLifecycle.setCurrentStatus("Crafting");
             AutismClientMessaging.sendPrefixed("\u00a7cNo craft recipes selected.");
             return;
         }
@@ -183,21 +183,21 @@ final class MacroWorldActions {
             CraftAction.CraftEntry entry = craftAction.entries.get(index);
             if (entry == null || !entry.hasRecipe()) continue;
 
-            MacroExecutor.setCurrentStatus(entry.useMaxAmount
+            MacroLifecycle.setCurrentStatus(entry.useMaxAmount
                 ? "Crafting " + entry.resultName + " [Max] (" + (index + 1) + "/" + craftAction.entries.size() + ")"
                 : "Crafting " + entry.resultName + " x" + Math.max(1, entry.amount) + " (" + (index + 1) + "/" + craftAction.entries.size() + ")");
 
             AutismCraftingHelper.CraftableRecipeOption option = AutismCraftingHelper.findCraftableRecipe(mc, entry.recipeKey);
             if (option == null) option = AutismCraftingHelper.findCraftableRecipe(mc, entry.recipeId);
             if (option == null) {
-                MacroExecutor.setCurrentStatus("Recipe not found");
+                MacroLifecycle.setCurrentStatus("Recipe not found");
                 AutismClientMessaging.sendPrefixed("\u00a7cRecipe not found: " + (entry.resultName == null || entry.resultName.isBlank() ? "unknown" : entry.resultName));
                 return;
             }
 
             int desiredAmount = AutismCraftingHelper.getEffectiveRequestedOutput(option, entry.amount, entry.useMaxAmount);
             if (desiredAmount <= 0) {
-                MacroExecutor.setCurrentStatus("No space or materials");
+                MacroLifecycle.setCurrentStatus("No space or materials");
                 AutismClientMessaging.sendPrefixed("\u00a7cNo space or materials for " + entry.resultName + ".");
                 return;
             }
@@ -209,12 +209,12 @@ final class MacroWorldActions {
                 desiredAmount
             );
 
-            MacroExecutor.setCurrentStatus(result.message);
+            MacroLifecycle.setCurrentStatus(result.message);
             if (!result.success) {
                 AutismClientMessaging.sendPrefixed("\u00a7c" + result.message);
                 return;
             }
-            if (MacroExecutor.isCurrentRunActive()) {
+            if (MacroLifecycle.isCurrentRunActive()) {
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
                 MacroRunLoop.waitForCondition(tickFuture);
             }
@@ -222,7 +222,7 @@ final class MacroWorldActions {
     }
 
     public static void runGoToAction(Minecraft mc, GoToAction goToAction) throws InterruptedException {
-        MacroExecutor.setCurrentStatus(String.format("Going to %.0f,%.0f,%.0f", goToAction.x, goToAction.y, goToAction.z));
+        MacroLifecycle.setCurrentStatus(String.format("Going to %.0f,%.0f,%.0f", goToAction.x, goToAction.y, goToAction.z));
 
         if (!AutismCompatManager.isBaritoneAvailable()) {
             AutismClientMessaging.sendPrefixed("Baritone not installed; skipping goto action.");
@@ -241,25 +241,25 @@ final class MacroWorldActions {
 
         try {
             if (!goToAction.waitForArrival) {
-                MacroExecutor.setCurrentStatus("Goto started");
+                MacroLifecycle.setCurrentStatus("Goto started");
                 return;
             }
 
             long startMs = System.currentTimeMillis();
             boolean sawBaritoneActivity = false;
 
-            while (MacroExecutor.isCurrentRunActive()) {
+            while (MacroLifecycle.isCurrentRunActive()) {
                 boolean goalActive = AutismCompatManager.isBaritoneGoalActive();
                 boolean baritoneBusy = AutismCompatManager.isBaritoneBusy();
                 if (goalActive || baritoneBusy) sawBaritoneActivity = true;
 
                 if (sawBaritoneActivity && !goalActive && !baritoneBusy) {
-                    MacroExecutor.setCurrentStatus("Goto finished");
+                    MacroLifecycle.setCurrentStatus("Goto finished");
                     return;
                 }
 
                 if (!sawBaritoneActivity && System.currentTimeMillis() - startMs >= 1500 && !goalActive && !baritoneBusy) {
-                    MacroExecutor.setCurrentStatus("Goto finished");
+                    MacroLifecycle.setCurrentStatus("Goto finished");
                     return;
                 }
 
@@ -267,14 +267,14 @@ final class MacroWorldActions {
                 MacroRunLoop.waitForCondition(tickFuture);
             }
         } finally {
-            if (!MacroExecutor.isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
+            if (!MacroLifecycle.isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
             else releaseBaritoneOwner(run);
         }
     }
 
     public static void runMineAction(Minecraft mc, MineAction mineAction) throws InterruptedException {
         String mineDesc = mineAction.targetBlocks.isEmpty() ? "none" : mineAction.targetBlocks.get(0);
-        MacroExecutor.setCurrentStatus("Mining: " + mineDesc);
+        MacroLifecycle.setCurrentStatus("Mining: " + mineDesc);
 
         if (mineAction.targetBlocks.isEmpty()) return;
         if (!AutismCompatManager.isBaritoneAvailable()) {
@@ -305,7 +305,7 @@ final class MacroWorldActions {
             long mineStartMs = System.currentTimeMillis();
             boolean sawBaritoneActivity = false;
 
-            while (MacroExecutor.isCurrentRunActive()) {
+            while (MacroLifecycle.isCurrentRunActive()) {
                 boolean mineActive = AutismCompatManager.isBaritoneMineActive();
                 boolean baritoneBusy = AutismCompatManager.isBaritoneBusy();
                 if (mineActive || baritoneBusy) sawBaritoneActivity = true;
@@ -316,7 +316,7 @@ final class MacroWorldActions {
                 if (mineTracker != null) {
                     mineTracker.poll(mc);
                     minedDelta = mineTracker.destroyedCount();
-                    MacroExecutor.setCurrentStatus("Mining: " + mineDesc + " (" + minedDelta + "/" + mineAction.minedCountTarget + ")");
+                    MacroLifecycle.setCurrentStatus("Mining: " + mineDesc + " (" + minedDelta + "/" + mineAction.minedCountTarget + ")");
                     if (minedDelta >= mineAction.minedCountTarget) {
                         stopReason = "Mine target reached";
                     }
@@ -339,19 +339,19 @@ final class MacroWorldActions {
                 }
 
                 if (stopReason != null) {
-                    MacroExecutor.setCurrentStatus(stopReason);
+                    MacroLifecycle.setCurrentStatus(stopReason);
                     requestOwnedBaritoneStop(run, mc);
                     waitForBaritoneIdle();
                     return;
                 }
 
                 if (sawBaritoneActivity && !mineActive && !baritoneBusy) {
-                    MacroExecutor.setCurrentStatus("Mine finished");
+                    MacroLifecycle.setCurrentStatus("Mine finished");
                     return;
                 }
 
                 if (!sawBaritoneActivity && System.currentTimeMillis() - mineStartMs >= 1500 && !mineActive && !baritoneBusy) {
-                    MacroExecutor.setCurrentStatus("Mine finished");
+                    MacroLifecycle.setCurrentStatus("Mine finished");
                     return;
                 }
 
@@ -360,7 +360,7 @@ final class MacroWorldActions {
             }
         } finally {
             if (run != null && run.activeMineTracker == mineTracker) run.activeMineTracker = null;
-            if (!MacroExecutor.isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
+            if (!MacroLifecycle.isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
             else releaseBaritoneOwner(run);
         }
     }
@@ -407,7 +407,7 @@ final class MacroWorldActions {
 
     private static void waitForBaritoneIdle() {
         long waitStartMs = System.currentTimeMillis();
-        while (MacroExecutor.isCurrentRunActive() && AutismCompatManager.isBaritoneBusy() && System.currentTimeMillis() - waitStartMs < 3000L) {
+        while (MacroLifecycle.isCurrentRunActive() && AutismCompatManager.isBaritoneBusy() && System.currentTimeMillis() - waitStartMs < 3000L) {
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
             MacroRunLoop.waitForCondition(tickFuture);
         }
@@ -566,7 +566,7 @@ final class MacroWorldActions {
         int sent = 0;
 
         for (int i = 0; i < targets.size(); i++) {
-            if (!MacroExecutor.isCurrentRunActive()) break;
+            if (!MacroLifecycle.isCurrentRunActive()) break;
             String player = targets.get(i);
 
             long perAmount = dividedAmounts != null ? dividedAmounts[i] : resolvedAmount;
@@ -591,7 +591,7 @@ final class MacroWorldActions {
 
             if (sent > 0 && payAction.delayEnabled && payAction.delayMs > 0) Thread.sleep(payAction.delayMs);
 
-            MacroExecutor.setCurrentStatus("Paying " + player + " " + amountLabel + " (" + (sent + 1) + "/" + targets.size() + ")");
+            MacroLifecycle.setCurrentStatus("Paying " + player + " " + amountLabel + " (" + (sent + 1) + "/" + targets.size() + ")");
 
             MacroClientThread.runOnClientThread(mc, () -> {
                 try {
@@ -609,8 +609,8 @@ final class MacroWorldActions {
             sent++;
 
             if (payAction.confirmMacro != null && !payAction.confirmMacro.isBlank()) {
-                MacroExecutor.setCurrentStatus("Confirming " + player);
-                PayAction.runConfirmMacro(payAction.confirmMacro, () -> !MacroExecutor.isCurrentRunActive());
+                MacroLifecycle.setCurrentStatus("Confirming " + player);
+                PayAction.runConfirmMacro(payAction.confirmMacro, () -> !MacroLifecycle.isCurrentRunActive());
             }
         }
     }

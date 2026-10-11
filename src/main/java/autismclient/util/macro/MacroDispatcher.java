@@ -17,7 +17,7 @@ final class MacroDispatcher {
         if (!MacroDynamicBindings.apply(action, mc)) return;
         if (!MacroActionRunner.dynamicTextInputsAvailable(action, mc)) return;
         MacroPrearm.clearOwnCaptureOutput(action);
-        EnumSet<SharedClientResource> heldResources = MacroExecutor.acquireClientResources(action);
+        EnumSet<SharedClientResource> heldResources = MacroLifecycle.acquireClientResources(action);
         try {
 
         if (!MacroActionRunner.waitForGuiBeforeAction(mc, action)) return;
@@ -28,7 +28,7 @@ final class MacroDispatcher {
         if (action instanceof DelayAction) {
             DelayAction da = (DelayAction) action;
             if (da.useTicks) {
-                for (int t = 0; t < da.delayTicks && MacroExecutor.isCurrentRunActive(); t++) {
+                for (int t = 0; t < da.delayTicks && MacroLifecycle.isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tf = MacroConditionRegistry.waitForNextTick();
                     MacroRunLoop.waitForCondition(tf);
                 }
@@ -36,7 +36,7 @@ final class MacroDispatcher {
                 Thread.sleep(da.delayMs);
             }
         } else if (action instanceof CustomMenuAction customMenu) {
-            MacroExecutor.setCurrentStatus(customMenu.getDisplayName());
+            MacroLifecycle.setCurrentStatus(customMenu.getDisplayName());
             customMenu.execute(mc);
         } else if (action instanceof WaitForPacketAction packetAction) {
             packetAction.matchedPacket = null;
@@ -51,29 +51,29 @@ final class MacroDispatcher {
                 MacroPacketWait.awaitPacket("");
             } else {
                 for (String target : targets) {
-                    if (!MacroExecutor.isCurrentRunActive()) break;
+                    if (!MacroLifecycle.isCurrentRunActive()) break;
                     MacroPacketWait.awaitPacket(target);
                 }
             }
             MacroPrearm.copyLastMatchedPacket(packetAction);
         } else if (action instanceof WaitPacketMatchAction wpma) {
-            MacroExecutor.setCurrentStatus(wpma.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wpma.getDisplayName());
             MacroPrearm.waitForPacketMatch(wpma);
         } else if (action instanceof WaitInventoryPredicateAction wipa) {
-            MacroExecutor.setCurrentStatus(wipa.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wipa.getDisplayName());
             MacroRunLoop.waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
         } else if (action instanceof WaitDurabilityAction wda) {
-            MacroExecutor.setCurrentStatus(wda.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wda.getDisplayName());
             if (wda.useNext) MacroDurability.waitForDurabilityUseNext(mc, wda);
             else MacroRunLoop.waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
         } else if (action instanceof WaitFreeSlotsAction wfsa) {
-            MacroExecutor.setCurrentStatus(wfsa.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wfsa.getDisplayName());
             MacroRunLoop.waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
         } else if (action instanceof WaitEntityTargetAction weta) {
-            MacroExecutor.setCurrentStatus(weta.getDisplayName());
+            MacroLifecycle.setCurrentStatus(weta.getDisplayName());
             MacroRunLoop.waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
         } else if (action instanceof WaitGuiTypeAction wgta) {
-            MacroExecutor.setCurrentStatus(wgta.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wgta.getDisplayName());
             MacroPrearm.clearCaptureOutputs(wgta);
             if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) MacroRunLoop.waitForPredicate(MacroRunLoop.guiClosePredicate(wgta, mc), wgta.timeoutMs);
             else MacroRunLoop.waitForPredicate(() -> {
@@ -88,14 +88,14 @@ final class MacroDispatcher {
             postGuiFuture = MacroActionRunner.runTargetWaitInteractionAction(mc, action);
         } else if (action instanceof WaitForHealthAction) {
             WaitForHealthAction wh = (WaitForHealthAction) action;
-            MacroExecutor.setCurrentStatus(wh.waitingStatusText());
+            MacroLifecycle.setCurrentStatus(wh.waitingStatusText());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForHealth(wh.healthThreshold, wh.below);
                 MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForBlockAction) {
             WaitForBlockAction wba = (WaitForBlockAction) action;
-            MacroExecutor.setCurrentStatus(wba.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wba.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForBlock(wba);
                 MacroRunLoop.waitForCondition(future);
@@ -104,10 +104,10 @@ final class MacroDispatcher {
             WaitForGuiAction wga = (WaitForGuiAction) action;
             MacroPrearm.clearCaptureOutputs(wga);
             if (wga.waitMode == WaitForGuiAction.WaitMode.CLOSE) {
-                MacroExecutor.setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
+                MacroLifecycle.setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
                 MacroRunLoop.waitForPredicate(MacroRunLoop.guiClosePredicate(wga, mc), wga.timeoutMs);
             } else {
-                MacroExecutor.setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
+                MacroLifecycle.setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
                 MacroRunLoop.waitForPredicate(() -> {
                     var captured = wga.captureGui(mc.gui.screen());
                     captured.ifPresent(values -> MacroPrearm.stageCapture(wga, values));
@@ -120,7 +120,7 @@ final class MacroDispatcher {
             ItemTarget cooldownTarget = MacroWorldActions.resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
             if (cooldownTarget == null) return;
             String cooldownLabel = MacroWorldActions.describeItemTarget(cooldownTarget);
-            MacroExecutor.setCurrentStatus("Waiting for cooldown: " +
+            MacroLifecycle.setCurrentStatus("Waiting for cooldown: " +
                 (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForCooldown(cooldownTarget, wca.checkMainInteractionHand);
@@ -128,7 +128,7 @@ final class MacroDispatcher {
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitPosAction) {
             WaitPosAction wpa = (WaitPosAction) action;
-            MacroExecutor.setCurrentStatus("Waiting for Pos: " + String.format("%.0f, %.0f, %.0f", wpa.x, wpa.y, wpa.z));
+            MacroLifecycle.setCurrentStatus("Waiting for Pos: " + String.format("%.0f, %.0f, %.0f", wpa.x, wpa.y, wpa.z));
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPos(
                     wpa.x, wpa.y, wpa.z, wpa.leeway, wpa.checkRotation, wpa.yaw, wpa.pitch, wpa.rotLeeway);
@@ -138,69 +138,69 @@ final class MacroDispatcher {
             MacroCaptureAutofill.runCaptureValueAction(mc, captureValue);
         } else if (action instanceof WaitForChatAction) {
             WaitForChatAction wca = (WaitForChatAction) action;
-            MacroExecutor.setCurrentStatus("Waiting for chat: " + wca.pattern);
+            MacroLifecycle.setCurrentStatus("Waiting for chat: " + wca.pattern);
             MacroPacketWait.awaitChat(wca);
         } else if (action instanceof WaitForEntityAction) {
             WaitForEntityAction wea = (WaitForEntityAction) action;
-            MacroExecutor.setCurrentStatus(wea.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wea.getDisplayName());
             try {
                 MacroRunLoop.waitForPredicate(() -> wea.matchesEntityTarget(mc), wea.timeoutMs);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForSoundAction) {
             WaitForSoundAction wsa = (WaitForSoundAction) action;
             String sndDesc = wsa.soundIds.isEmpty() ? "any" : wsa.soundIds.get(0);
-            MacroExecutor.setCurrentStatus("Waiting for sound: " + sndDesc);
+            MacroLifecycle.setCurrentStatus("Waiting for sound: " + sndDesc);
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSound(wsa);
                 MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForSlotChangeAction) {
             WaitForSlotChangeAction wsca = (WaitForSlotChangeAction) action;
-            MacroExecutor.setCurrentStatus(wsca.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wsca.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSlotChange(wsca);
                 MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForWorldChangeAction world) {
-            MacroExecutor.setCurrentStatus(world.getDisplayName());
+            MacroLifecycle.setCurrentStatus(world.getDisplayName());
             try {
                 CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, world);
                 MacroRace.waitForFutureDone(future, 0);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForPositionDeltaAction wpda) {
-            MacroExecutor.setCurrentStatus(wpda.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wpda.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPositionDelta(wpda.distance, wpda.horizontalOnly);
                 MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForTeleportAction teleport) {
-            MacroExecutor.setCurrentStatus(teleport.getDisplayName());
+            MacroLifecycle.setCurrentStatus(teleport.getDisplayName());
             try {
                 CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, teleport);
                 MacroRace.waitForFutureDone(future, 0);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitGamemodeChangeAction gm) {
-            MacroExecutor.setCurrentStatus(gm.getDisplayName());
+            MacroLifecycle.setCurrentStatus(gm.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForGamemodeChange(gm);
                 MacroRace.waitForFutureDone(future, gm.timeoutMs);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitMovementAction wm) {
-            MacroExecutor.setCurrentStatus(wm.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wm.getDisplayName());
             try {
                 CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, wm.resolveSubAction());
                 MacroRace.waitForFutureDone(future, 0);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForLanStepAction) {
             WaitForLanStepAction wla = (WaitForLanStepAction) action;
-            MacroExecutor.setCurrentStatus(wla.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wla.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(wla);
                 MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForMacroStepAction) {
             WaitForMacroStepAction wma = (WaitForMacroStepAction) action;
-            MacroExecutor.setCurrentStatus(wma.getDisplayName());
+            MacroLifecycle.setCurrentStatus(wma.getDisplayName());
             MacroRace.waitForMacroStep(wma);
         } else if (action instanceof GoToAction) {
             GoToAction ga = (GoToAction) action;
@@ -209,15 +209,15 @@ final class MacroDispatcher {
             MoveAction ma = (MoveAction) action;
             if (ma.nonBlocking) {
                 mc.execute(() -> ma.execute(mc));
-                MacroExecutor.currentBackgroundMoves().put(ma, new int[]{ma.durationTicks - 1});
+                MacroLifecycle.currentBackgroundMoves().put(ma, new int[]{ma.durationTicks - 1});
             } else {
-                for (int t = 0; t < ma.durationTicks && MacroExecutor.isCurrentRunActive(); t++) {
+                for (int t = 0; t < ma.durationTicks && MacroLifecycle.isCurrentRunActive(); t++) {
                     mc.execute(() -> ma.execute(mc));
                     CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
                     MacroRunLoop.waitForCondition(tickFuture);
                 }
                 MacroExecutor.RunState movementRun = MacroExecutor.CURRENT_RUN.get();
-                mc.execute(() -> MacroExecutor.releaseMoveIfUnused(movementRun, ma, mc));
+                mc.execute(() -> MacroLifecycle.releaseMoveIfUnused(movementRun, ma, mc));
             }
         } else if (action instanceof LookAtBlockAction) {
             LookAtBlockAction la = (LookAtBlockAction) action;
@@ -265,7 +265,7 @@ final class MacroDispatcher {
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
                 MacroRunLoop.waitForCondition(tickFuture);
             } else {
-                for (int t = 0; t < ja.durationTicks && MacroExecutor.isCurrentRunActive(); t++) {
+                for (int t = 0; t < ja.durationTicks && MacroLifecycle.isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
                     MacroRunLoop.waitForCondition(tickFuture);
                 }
@@ -274,29 +274,29 @@ final class MacroDispatcher {
         } else if (action instanceof SneakAction) {
             SneakAction sna = (SneakAction) action;
             if (sna.persistent && sna.sneak) {
-                MacroExecutor.currentPersistentActions().removeIf(p -> p instanceof SneakAction);
-                MacroExecutor.currentPersistentActions().add(sna);
+                MacroLifecycle.currentPersistentActions().removeIf(p -> p instanceof SneakAction);
+                MacroLifecycle.currentPersistentActions().add(sna);
             } else if (!sna.sneak) {
-                MacroExecutor.currentPersistentActions().removeIf(p -> p instanceof SneakAction);
+                MacroLifecycle.currentPersistentActions().removeIf(p -> p instanceof SneakAction);
             }
-            if (sna.persistent || !sna.sneak) MacroClientThread.postOnClientThread(mc, () -> MacroExecutor.applyAggregateSneakState(mc), sna.isTickAligned());
+            if (sna.persistent || !sna.sneak) MacroClientThread.postOnClientThread(mc, () -> MacroLifecycle.applyAggregateSneakState(mc), sna.isTickAligned());
             else MacroClientThread.postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
         } else if (action instanceof SprintAction) {
             SprintAction spa = (SprintAction) action;
             if (spa.persistent && spa.sprint) {
-                MacroExecutor.currentPersistentActions().removeIf(p -> p instanceof SprintAction);
-                MacroExecutor.currentPersistentActions().add(spa);
+                MacroLifecycle.currentPersistentActions().removeIf(p -> p instanceof SprintAction);
+                MacroLifecycle.currentPersistentActions().add(spa);
             } else if (!spa.sprint) {
-                MacroExecutor.currentPersistentActions().removeIf(p -> p instanceof SprintAction);
+                MacroLifecycle.currentPersistentActions().removeIf(p -> p instanceof SprintAction);
             }
-            if (spa.persistent || !spa.sprint) MacroClientThread.postOnClientThread(mc, () -> MacroExecutor.applyAggregateSprintState(mc), spa.isTickAligned());
+            if (spa.persistent || !spa.sprint) MacroClientThread.postOnClientThread(mc, () -> MacroLifecycle.applyAggregateSprintState(mc), spa.isTickAligned());
             else MacroClientThread.postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
         } else if (action instanceof NbtBookAction nba) {
             int totalBooks = Math.max(1, nba.bookCount);
             long delayMs = Math.max(1, nba.delayTicks) * 50L;
             boolean signedAny = false;
             for (int b = 0; b < totalBooks; b++) {
-                if (!MacroExecutor.isCurrentRunActive()) break;
+                if (!MacroLifecycle.isCurrentRunActive()) break;
                 final int bookIdx = b;
                 java.util.concurrent.CompletableFuture<Boolean> result = new java.util.concurrent.CompletableFuture<>();
                 mc.execute(() -> result.complete(nba.executeSingleBook(mc, bookIdx, totalBooks)));
@@ -354,14 +354,14 @@ final class MacroDispatcher {
                     && (xsa.transferMode == XCarryAction.TransferMode.CLICK
                         || xsa.transferMode == XCarryAction.TransferMode.SAFE_CLICK)) {
                 if (xsa.transferMode == XCarryAction.TransferMode.SAFE_CLICK) {
-                    MacroExecutor.setCurrentStatus("XCarry Safe");
+                    MacroLifecycle.setCurrentStatus("XCarry Safe");
                     MacroXCarry.runXCarrySafeClickPutIn(mc, xsa);
                 } else {
-                    MacroExecutor.setCurrentStatus("XCarry Click");
+                    MacroLifecycle.setCurrentStatus("XCarry Click");
                     MacroXCarry.runXCarryClickPutIn(mc, xsa);
                 }
             } else {
-                MacroExecutor.setCurrentStatus(switch (xsa.mode) {
+                MacroLifecycle.setCurrentStatus(switch (xsa.mode) {
                     case PUT_IN -> "XCarry";
                     case TAKE_OUT -> "XCarry Out";
                     case DROP -> "XCarry Drop";
@@ -378,10 +378,10 @@ final class MacroDispatcher {
             MacroWorldActions.runCraftAction(mc, (CraftAction) action);
         } else if (action instanceof autismclient.util.macro.StoreItemAction) {
             autismclient.util.macro.StoreItemAction sia = (autismclient.util.macro.StoreItemAction) action;
-            MacroExecutor.setCurrentStatus((sia.mode == autismclient.util.macro.StoreItemAction.Mode.LOOT ? "Looting" : "Storing")
+            MacroLifecycle.setCurrentStatus((sia.mode == autismclient.util.macro.StoreItemAction.Mode.LOOT ? "Looting" : "Storing")
                 + (sia.persistent ? " \u221e" : ""));
             if (sia.persistent) {
-                while (MacroExecutor.isCurrentRunActive()) {
+                while (MacroLifecycle.isCurrentRunActive()) {
                     try { MacroActionRunner.runStoreItemAction(mc, sia); }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                     catch (Exception e) { AutismClientMessaging.sendPrefixed("Store error: " + e.getMessage()); }
@@ -396,7 +396,7 @@ final class MacroDispatcher {
         } else if (action instanceof InventoryAuditAction auditAction
                 && (auditAction.mode == InventoryAuditAction.Mode.DUPE
                     || auditAction.mode == InventoryAuditAction.Mode.DUPE_SPAM)) {
-            MacroExecutor.setCurrentStatus("Dupe: " + auditAction.dupeVector.name() + " " + auditAction.openMode.name());
+            MacroLifecycle.setCurrentStatus("Dupe: " + auditAction.dupeVector.name() + " " + auditAction.openMode.name());
             try {
                 auditAction.executeDupe(mc);
             } catch (InterruptedException ie) {
@@ -414,11 +414,11 @@ final class MacroDispatcher {
             java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
                 MacroActionRunner.preGeneratePacketsForRepeat(tsa.preGenCount, mc);
             long targetTick = mc.level.getGameTime() + tsa.tickOffset;
-            MacroExecutor.setCurrentStatus("Tick Sync -> " + targetTick + " (" + preGenerated.size() + " pkts)");
-            while (MacroExecutor.isCurrentRunActive() && mc.level.getGameTime() < targetTick) {
+            MacroLifecycle.setCurrentStatus("Tick Sync -> " + targetTick + " (" + preGenerated.size() + " pkts)");
+            while (MacroLifecycle.isCurrentRunActive() && mc.level.getGameTime() < targetTick) {
                 java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
             }
-            if (MacroExecutor.isCurrentRunActive()) {
+            if (MacroLifecycle.isCurrentRunActive()) {
                 MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
                 if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
@@ -430,13 +430,13 @@ final class MacroDispatcher {
                 MacroActionRunner.preGeneratePacketsForRepeat(rsa.preGenCount, mc);
             int baseRevision = mc.player.containerMenu.getStateId();
             int targetRevision = baseRevision + rsa.revisionOffset;
-            MacroExecutor.setCurrentStatus("Rev Sync -> " + targetRevision + " (" + preGenerated.size() + " pkts)");
-            while (MacroExecutor.isCurrentRunActive()) {
+            MacroLifecycle.setCurrentStatus("Rev Sync -> " + targetRevision + " (" + preGenerated.size() + " pkts)");
+            while (MacroLifecycle.isCurrentRunActive()) {
                 if (mc.player == null || mc.player.containerMenu == null) break;
                 if (mc.player.containerMenu.getStateId() >= targetRevision) break;
                 java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
             }
-            if (MacroExecutor.isCurrentRunActive() && mc.player != null && mc.player.containerMenu != null) {
+            if (MacroLifecycle.isCurrentRunActive() && mc.player != null && mc.player.containerMenu != null) {
                 MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
                 if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
@@ -447,22 +447,22 @@ final class MacroDispatcher {
             java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
                 MacroActionRunner.preGeneratePacketsForRepeat(stsa.preGenCount, mc);
             int sampleWaitMs = 0;
-            while (MacroExecutor.isCurrentRunActive() && !ServerTickTracker.isReady() && sampleWaitMs < stsa.maxWaitMs) {
+            while (MacroLifecycle.isCurrentRunActive() && !ServerTickTracker.isReady() && sampleWaitMs < stsa.maxWaitMs) {
                 float progress = ServerTickTracker.getWarmupProgress();
-                MacroExecutor.setCurrentStatus(String.format("ServerSync warmup %.0f%% (%d samples, %dms)",
+                MacroLifecycle.setCurrentStatus(String.format("ServerSync warmup %.0f%% (%d samples, %dms)",
                     progress * 100, ServerTickTracker.getSampleCount(), ServerTickTracker.getTrackingTimeMs()));
                 Thread.sleep(50);
                 sampleWaitMs += 50;
             }
-            if (!MacroExecutor.isCurrentRunActive()) return;
+            if (!MacroLifecycle.isCurrentRunActive()) return;
             long optimalTime = ServerTickTracker.getOptimalSendTime(stsa.bufferMs, stsa.ignorePing);
             long msUntil = (optimalTime - System.nanoTime()) / 1_000_000L;
             int ping = ServerTickTracker.getPingMs();
             String pingStr = stsa.ignorePing ? " (no ping)" : " ping:" + ping + "ms";
-            MacroExecutor.setCurrentStatus("ServerSync in " + Math.max(0, msUntil) + "ms" + pingStr + " (" + preGenerated.size() + " pkts)");
+            MacroLifecycle.setCurrentStatus("ServerSync in " + Math.max(0, msUntil) + "ms" + pingStr + " (" + preGenerated.size() + " pkts)");
             long startWait = System.nanoTime();
             long maxWaitNanos = stsa.maxWaitMs * 1_000_000L;
-            while (MacroExecutor.isCurrentRunActive()) {
+            while (MacroLifecycle.isCurrentRunActive()) {
                 long now = System.nanoTime();
                 if ((now - startWait) >= maxWaitNanos) break;
                 if (now >= optimalTime) break;
@@ -473,7 +473,7 @@ final class MacroDispatcher {
                     Thread.onSpinWait();
                 }
             }
-            if (MacroExecutor.isCurrentRunActive()) {
+            if (MacroLifecycle.isCurrentRunActive()) {
                 MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
                 if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
@@ -481,10 +481,10 @@ final class MacroDispatcher {
                 AutismClientMessaging.sendPrefixed("ServerSync: " + preGenerated.size() + " pkts (+" + actualDelay + "ms)");
             }
         } else if (action instanceof BundleDupeV2Action bundleV2) {
-            MacroExecutor.setCurrentStatus("Bundle Dupe V2");
+            MacroLifecycle.setCurrentStatus("Bundle Dupe V2");
             bundleV2.execute(mc);
         } else if (action instanceof RollbackAction rollback) {
-            MacroExecutor.setCurrentStatus("Rollback");
+            MacroLifecycle.setCurrentStatus("Rollback");
             try {
                 rollback.executeRollback(mc);
             } catch (InterruptedException e) {
@@ -494,7 +494,7 @@ final class MacroDispatcher {
             }
         } else if (action instanceof StopMacroAction) {
             StopMacroAction stopAction = (StopMacroAction) action;
-            if (stopAction.target == StopMacroAction.StopTarget.SELF) MacroExecutor.stopCurrentRun();
+            if (stopAction.target == StopMacroAction.StopTarget.SELF) MacroLifecycle.stopCurrentRun();
             else stopAction.execute(mc);
         } else if (action instanceof UseItemPhaseAction phaseAction) {
             MacroActionRunner.runUseItemPhaseAction(mc, phaseAction);
@@ -508,7 +508,7 @@ final class MacroDispatcher {
             } else if (module != null && module.useInstantExecutionMode()) {
                 java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
                 MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
-                mc.execute(() -> MacroExecutor.withRunContext(scheduledRun, () -> {
+                mc.execute(() -> MacroLifecycle.withRunContext(scheduledRun, () -> {
                     try {
                         action.execute(mc);
                     } catch (Exception e) {
@@ -529,20 +529,20 @@ final class MacroDispatcher {
 
         MacroPrearm.commitConditionOutput(action, mc);
 
-        if (postGuiFuture != null && MacroExecutor.isCurrentRunActive()) {
+        if (postGuiFuture != null && MacroLifecycle.isCurrentRunActive()) {
             try {
                 MacroRunLoop.waitForCondition(postGuiFuture);
             } catch (java.util.concurrent.CancellationException e) {  }
         }
 
-        if (MacroExecutor.isCurrentRunActive() && !MacroActionRunner.isInstantInventoryAction(action) && module != null && module.useInstantExecutionMode()) {
+        if (MacroLifecycle.isCurrentRunActive() && !MacroActionRunner.isInstantInventoryAction(action) && module != null && module.useInstantExecutionMode()) {
             int delayUs = module.getActionDelayUs();
             if (delayUs > 0) java.util.concurrent.locks.LockSupport.parkNanos(delayUs * 1000L);
             else Thread.onSpinWait();
         }
         } finally {
             MacroRaycastAim.release();
-            MacroExecutor.releaseClientResources(heldResources);
+            MacroLifecycle.releaseClientResources(heldResources);
         }
     }
 }

@@ -78,7 +78,7 @@ final class MacroPacketWait {
                 run.waitingForPacket.set(true);
             }
             try {
-                MacroExecutor.setCurrentStatus(normalizedTarget.isEmpty()
+                MacroLifecycle.setCurrentStatus(normalizedTarget.isEmpty()
                     ? "Waiting for packet: Any"
                     : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
                 MacroRunLoop.waitForCondition(future);
@@ -102,7 +102,7 @@ final class MacroPacketWait {
             MacroExecutor.isWaitingForPacket.set(true);
         }
         try {
-            MacroExecutor.setCurrentStatus(normalizedTarget.isEmpty()
+            MacroLifecycle.setCurrentStatus(normalizedTarget.isEmpty()
                 ? "Waiting for packet: Any"
                 : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
             MacroRunLoop.waitForCondition(future);

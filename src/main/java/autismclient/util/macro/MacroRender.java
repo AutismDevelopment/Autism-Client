@@ -92,7 +92,7 @@ final class MacroRender {
 
     static void waitForSmoothRotationCompletion() {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        while (MacroExecutor.isCurrentRunActive() && MacroExecutor.isRotating.get()
+        while (MacroLifecycle.isCurrentRunActive() && MacroExecutor.isRotating.get()
             && (run == null || MacroExecutor.ROTATION_OWNER.get() == run)) {
             java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         }
@@ -119,7 +119,7 @@ final class MacroRender {
                 latch.countDown();
             }
         });
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             try {
                 if (latch.await(10, java.util.concurrent.TimeUnit.MILLISECONDS)) {
                     break;

@@ -122,11 +122,11 @@ final class MacroChatObserve {
     }
 
     private static boolean matchesChatAction(WaitForChatAction action, MacroExecutor.ChatCapture capture) {
-        return captureChatAction(action, capture, MacroExecutor.currentVariableContext()).isPresent();
+        return captureChatAction(action, capture, MacroLifecycle.currentVariableContext()).isPresent();
     }
 
     private static java.util.Optional<java.util.Map<String, MacroValue>> captureChatAction(WaitForChatAction action, MacroExecutor.ChatCapture capture) {
-        return captureChatAction(action, capture, MacroExecutor.currentVariableContext());
+        return captureChatAction(action, capture, MacroLifecycle.currentVariableContext());
     }
 
     public static java.util.Optional<java.util.Map<String, MacroValue>> captureChatAction(WaitForChatAction action, MacroExecutor.ChatCapture capture,

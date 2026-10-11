@@ -92,22 +92,22 @@ public class MacroExecutor {
             SHARED_RESOURCE_LOCKS.put(resource, new ReentrantLock(true));
         }
     }
-    private static final AtomicLong NEXT_RUN_ID = new AtomicLong(1L);
+    static final AtomicLong NEXT_RUN_ID = new AtomicLong(1L);
     static final java.util.LinkedHashMap<Long, RunState> ACTIVE_RUNS = new java.util.LinkedHashMap<>();
 
-    private static final java.util.concurrent.ConcurrentHashMap<Long, RunState> RUNS_BY_ID = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final AtomicLong RUN_STATE_REVISION = new AtomicLong();
+    static final java.util.concurrent.ConcurrentHashMap<Long, RunState> RUNS_BY_ID = new java.util.concurrent.ConcurrentHashMap<>();
+    static final AtomicLong RUN_STATE_REVISION = new AtomicLong();
     static final ThreadLocal<RunState> CURRENT_RUN = new ThreadLocal<>();
     static final ThreadLocal<Boolean> SUPPRESS_POST_GUI_AFTER = ThreadLocal.withInitial(() -> false);
-    private static volatile RunState primaryRun = null;
-    private static volatile boolean visibleRunActive;
-    private static AutismMacro currentMacro = null;
-    private static Thread macroThread = null;
+    static volatile RunState primaryRun = null;
+    static volatile boolean visibleRunActive;
+    static AutismMacro currentMacro = null;
+    static Thread macroThread = null;
 
     static final AtomicReference<String> lastReceivedPacket = new AtomicReference<>("");
-    private static String currentStatus = "";
+    static String currentStatus = "";
 
-    private static volatile int currentStepIndex = -1;
+    static volatile int currentStepIndex = -1;
     static volatile int totalSteps = 0;
 
     static final AtomicBoolean isWaitingForPacket = new AtomicBoolean(false);
@@ -142,10 +142,10 @@ public class MacroExecutor {
     static volatile double rotationSpeed;
     static volatile int rotationAlignedFrames;
 
-    private static final java.util.concurrent.CopyOnWriteArrayList<MacroAction> persistentActions =
+    static final java.util.concurrent.CopyOnWriteArrayList<MacroAction> persistentActions =
         new java.util.concurrent.CopyOnWriteArrayList<>();
 
-    private static final java.util.concurrent.ConcurrentHashMap<MoveAction, int[]> backgroundMoves =
+    static final java.util.concurrent.ConcurrentHashMap<MoveAction, int[]> backgroundMoves =
         new java.util.concurrent.ConcurrentHashMap<>();
     static final ThreadLocal<RepeatPacketContext> REPEAT_PACKET_CONTEXT = new ThreadLocal<>();
     static final ThreadLocal<Integer> REPEAT_PACKET_SKIP = ThreadLocal.withInitial(() -> 0);
@@ -262,608 +262,53 @@ public class MacroExecutor {
         }
     }
 
-    private static final int FLOW_JUMP_BURST_CAP = 100_000;
-    private static final int FLOW_JUMP_HARD_CAP = 5_000_000;
-
-    private static java.util.Map<String, Integer> flowLabels(RunState run, AutismMacro macro) {
-        java.util.Map<String, Integer> cached = run.labelIndex;
-        if (cached != null) return cached;
-        java.util.LinkedHashMap<String, Integer> built = new java.util.LinkedHashMap<>();
-        for (int k = 0; k < macro.actions.size(); k++) {
-            if (macro.actions.get(k) instanceof LabelAction la) {
-                String key = la.normalizedName();
-                if (!key.isEmpty() && !built.containsKey(key)) built.put(key, k);
-            }
-        }
-        run.labelIndex = built;
-        return built;
-    }
-
-    private static Integer resolveFlowTarget(RunState run, AutismMacro macro, int i, FlowAction flow, Minecraft mc) {
-        return switch (flow.target) {
-            case STOP -> null;
-            case TOP -> 0;
-            case END -> macro.actions.size();
-            case FORWARD -> i + 1 + Math.max(0, flow.amount);
-            case BACK -> i - Math.max(0, flow.amount);
-            case STEP -> Math.max(1, flow.amount) - 1;
-            case LABEL -> {
-                String name = LabelAction.normalize(MacroVariables.expand(flow.labelName, mc));
-                Integer idx = flowLabels(run, macro).get(name);
-                if (idx == null) {
-                    AutismClientMessaging.sendPrefixed("§eFlow: label '" + flow.labelName + "' not found.");
-                    yield flow.onMissingLabel == FlowAction.MissingPolicy.STOP ? null : i + 1;
-                }
-                yield idx;
-            }
-        };
-    }
-
-    static int performFlowJump(RunState run, AutismMacro macro, int currentI, FlowAction flow, Minecraft mc) {
-        run.branchElseStart = -1;
-        run.branchElseCount = 0;
-        Integer dest = resolveFlowTarget(run, macro, currentI, flow, mc);
-        if (dest == null) return Integer.MIN_VALUE;
-        int size = macro.actions.size();
-        int target = Math.max(0, Math.min(size, dest));
-        if (target <= currentI) {
-            run.totalJumpsThisRun++;
-            run.jumpBudget++;
-            if (FLOW_JUMP_HARD_CAP >= 0 && run.totalJumpsThisRun > FLOW_JUMP_HARD_CAP) {
-                AutismClientMessaging.sendPrefixed("§cMacro aborted: jump limit exceeded (runaway loop).");
-                return Integer.MIN_VALUE;
-            }
-            if (run.jumpBudget >= FLOW_JUMP_BURST_CAP) {
-                run.jumpBudget = 0;
-
-                try { MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick()); } catch (Exception ignored) {  }
-            }
-        } else {
-            run.jumpBudget = 0;
-        }
-        return target - 1;
-    }
-
-    static boolean isCurrentRunActive() {
-        if (PackHideState.isHardLocked()) return false;
-        RunState run = CURRENT_RUN.get();
-        if (run != null) return run.running.get();
-        return isRunning.get();
-    }
+    static final int FLOW_JUMP_BURST_CAP = 100_000;
+    static final int FLOW_JUMP_HARD_CAP = 5_000_000;
 
     public static boolean isCurrentActionRunActive() {
-        return isCurrentRunActive();
-    }
-
-    static CopyOnWriteArrayList<MacroAction> currentPersistentActions() {
-        RunState run = CURRENT_RUN.get();
-        return run != null ? run.persistentActions : persistentActions;
-    }
-
-    static ConcurrentHashMap<MoveAction, int[]> currentBackgroundMoves() {
-        RunState run = CURRENT_RUN.get();
-        return run != null ? run.backgroundMoves : backgroundMoves;
-    }
-
-    static void setCurrentStatus(String status) {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) run.status = status == null ? "" : status;
-        currentStatus = status == null ? "" : status;
-    }
-
-    static void setCurrentStep(int step, int total) {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) {
-            run.currentStepIndex = step;
-            run.totalSteps = total;
-        }
-        currentStepIndex = step;
-        totalSteps = total;
-    }
-
-    static void markStepCompleted(int stepOneBased) {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) {
-            run.lastCompletedStep = Math.max(run.lastCompletedStep, stepOneBased);
-        }
-    }
-
-    static int stepOverrideEndIndex(AutismMacro macro, int headerIndex, int coveredRows) {
-        int last = macro == null ? headerIndex : macro.actions.size() - 1;
-        long end = (long) headerIndex + Math.max(0, coveredRows);
-        return (int) Math.max(headerIndex, Math.min(last, end));
-    }
-
-    static void armFpsStepOverride(RunState run, int headerIndex, int endIndexInclusive, int fpsLimit) {
-        if (run == null) return;
-        run.fpsStepHeaderIndex = headerIndex;
-        run.fpsStepEndIndex = endIndexInclusive;
-        FpsLimitController.applyUntilCleared(run.id, fpsLimit);
-    }
-
-    static void armPingStepOverride(RunState run, int headerIndex, int endIndexInclusive,
-                                            int delayMs, boolean realIncoming, boolean realOutgoing) {
-        if (run == null) return;
-        run.pingStepHeaderIndex = headerIndex;
-        run.pingStepEndIndex = endIndexInclusive;
-        PingSpoofController.applyUntilCleared(run.id, delayMs, realIncoming, realOutgoing);
-    }
-
-    static void clearFpsStepOverride(RunState run) {
-        if (run == null || run.fpsStepHeaderIndex < 0) return;
-        run.fpsStepHeaderIndex = -1;
-        run.fpsStepEndIndex = -1;
-        FpsLimitController.clear(run.id);
-    }
-
-    static void clearPingStepOverride(RunState run) {
-        if (run == null || run.pingStepHeaderIndex < 0) return;
-        run.pingStepHeaderIndex = -1;
-        run.pingStepEndIndex = -1;
-        PingSpoofController.clearMacro(run.id);
-    }
-
-    static void awaitBackgroundTimedOverrides(RunState run) throws InterruptedException {
-        if (run == null) return;
-
-        long deadline = Math.max(run.fpsBackgroundDeadlineNanos, run.pingBackgroundDeadlineNanos);
-        long remaining;
-        while (isCurrentRunActive() && (remaining = deadline - System.nanoTime()) > 0L) {
-            Thread.sleep(Math.min(25L, remaining / 1_000_000L + 1L));
-        }
-    }
-
-    static void updateStepBoundOverrides(RunState run, int index) {
-        if (run == null) return;
-        if (run.fpsStepHeaderIndex >= 0 && (index > run.fpsStepEndIndex || index <= run.fpsStepHeaderIndex)) {
-            clearFpsStepOverride(run);
-        }
-        if (run.pingStepHeaderIndex >= 0 && (index > run.pingStepEndIndex || index <= run.pingStepHeaderIndex)) {
-            clearPingStepOverride(run);
-        }
-    }
-
-    static void stopCurrentRun() {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) {
-            run.running.set(false);
-        } else {
-            stop();
-        }
-    }
-
-    static void stopCurrentActionRun() {
-        stopCurrentRun();
-    }
-
-    private static EnumSet<SharedClientResource> resourcesForAction(MacroAction action) {
-        return MacroActionResources.resourcesForAction(action);
-    }
-
-    static EnumSet<SharedClientResource> acquireClientResources(MacroAction action) throws InterruptedException {
-        return acquireClientResources(resourcesForAction(action));
-    }
-
-    static EnumSet<SharedClientResource> acquireClientResources(EnumSet<SharedClientResource> resources) throws InterruptedException {
-        EnumSet<SharedClientResource> acquired = EnumSet.noneOf(SharedClientResource.class);
-        try {
-            for (SharedClientResource resource : SharedClientResource.values()) {
-                if (resources.contains(resource)) {
-                    if (!isCurrentRunActive()) throw new InterruptedException("Macro stopped");
-                    SHARED_RESOURCE_LOCKS.get(resource).lockInterruptibly();
-                    acquired.add(resource);
-                    if (!isCurrentRunActive()) throw new InterruptedException("Macro stopped");
-                }
-            }
-        } catch (InterruptedException e) {
-            releaseClientResources(acquired);
-            throw e;
-        }
-        return acquired;
-    }
-
-    static EnumSet<SharedClientResource> resourcesForActions(java.util.List<MacroAction> actions) {
-        return MacroActionResources.resourcesForActions(actions);
-    }
-
-    static void releaseClientResources(EnumSet<SharedClientResource> resources) {
-        if (resources == null || resources.isEmpty()) return;
-        SharedClientResource[] ordered = SharedClientResource.values();
-        for (int i = ordered.length - 1; i >= 0; i--) {
-            SharedClientResource resource = ordered[i];
-            if (resources.contains(resource)) {
-                ReentrantLock lock = SHARED_RESOURCE_LOCKS.get(resource);
-                if (lock.isHeldByCurrentThread()) lock.unlock();
-            }
-        }
-    }
-
-    static MacroVariableContext currentVariableContext() {
-        RunState run = CURRENT_RUN.get();
-        return run == null ? null : run.variables;
-    }
-
-    static void withRunContext(RunState run, Runnable task) {
-        RunState previous = CURRENT_RUN.get();
-        if (run != null) CURRENT_RUN.set(run);
-        try {
-            task.run();
-        } finally {
-            if (previous != null) CURRENT_RUN.set(previous);
-            else CURRENT_RUN.remove();
-        }
-    }
-
-    static InlineNextActions collectInlineNextActions(java.util.List<MacroAction> actions, int currentIndex) {
-        if (actions == null || currentIndex < 0 || currentIndex >= actions.size() - 1) return InlineNextActions.empty();
-        java.util.ArrayList<MacroAction> collected = new java.util.ArrayList<>();
-        int lastIndex = -1;
-        for (int j = currentIndex + 1; j < actions.size(); j++) {
-            MacroAction candidate = actions.get(j);
-            if (candidate instanceof DisconnectAction
-                    || candidate instanceof RaceAction
-                    || candidate instanceof ReportAction
-                    || candidate instanceof RepeatAction
-                    || candidate instanceof BranchAction
-                    || candidate instanceof FinallyAction) {
-                break;
-            }
-            if (candidate == null || !candidate.isEnabled()) continue;
-            if (!RaceAction.isBodyAction(candidate)) continue;
-            collected.add(candidate);
-            lastIndex = j;
-        }
-        return collected.isEmpty() ? InlineNextActions.empty() : new InlineNextActions(java.util.List.copyOf(collected), lastIndex);
-    }
-
-    private static volatile java.util.List<RunState> ACTIVE_RUN_LIST = java.util.List.of();
-
-    private static void rebuildActiveRunListLocked() {
-        ACTIVE_RUN_LIST = java.util.List.copyOf(ACTIVE_RUNS.values());
-    }
-
-    static java.util.List<RunState> activeRunSnapshot() {
-        return ACTIVE_RUN_LIST;
-    }
-
-    static void finishCurrentRun() {
-        RunState run = CURRENT_RUN.get();
-        if (run == null) return;
-        if (!run.finished.compareAndSet(false, true)) return;
-        requestStop(run, false);
-
-        clearFpsStepOverride(run);
-        clearPingStepOverride(run);
-
-        synchronized (RUN_LOCK) {
-            ACTIVE_RUNS.remove(run.id);
-            RUNS_BY_ID.remove(run.id);
-            rebuildActiveRunListLocked();
-            if (ACTIVE_RUNS.isEmpty()) MacroCaptureAutofill.allRunsStoppedAtMs = System.currentTimeMillis();
-            RUN_STATE_REVISION.incrementAndGet();
-            refreshPrimaryRunLocked();
-        }
-        if (!isRunning.get()) {
-            AutismInstaBreakRenderer.clear();
-
-            FpsLimitController.clearAll();
-            PingSpoofController.clearAllMacros();
-        }
-        CURRENT_RUN.remove();
-    }
-
-    private static boolean hasRunningRunsLocked() {
-        for (RunState run : ACTIVE_RUNS.values()) {
-            if (run.running.get()) return true;
-        }
-        return false;
-    }
-
-    private static RunState firstVisibleRunLocked() {
-        for (RunState run : ACTIVE_RUNS.values()) {
-            if (run.running.get() && !run.options.hiddenFromProgressHud()) return run;
-        }
-        return null;
-    }
-
-    private static int activeRunCountLocked() {
-        int count = 0;
-        for (RunState run : ACTIVE_RUNS.values()) {
-            if (run.running.get()) count++;
-        }
-        return count;
-    }
-
-    static boolean hasMacroCapacity(int activeCount) {
-        return Math.max(0, activeCount) < MAX_CONCURRENT_MACROS;
-    }
-
-    private static void refreshPrimaryRunLocked() {
-        primaryRun = firstVisibleRunLocked();
-        visibleRunActive = primaryRun != null;
-        currentMacro = primaryRun != null ? primaryRun.macro : null;
-        currentStatus = primaryRun != null ? primaryRun.status : "";
-        currentStepIndex = primaryRun != null ? primaryRun.currentStepIndex : -1;
-        totalSteps = primaryRun != null ? primaryRun.totalSteps : 0;
-        isRunning.set(hasRunningRunsLocked());
-    }
-
-    private static boolean hasRunningRuns() {
-        synchronized (RUN_LOCK) {
-            return hasRunningRunsLocked();
-        }
+        return MacroLifecycle.isCurrentActionRunActive();
     }
 
     public static boolean isVisibleRunning() {
-        return visibleRunActive;
+        return MacroLifecycle.isVisibleRunning();
     }
 
     public static boolean isControllingInput() {
-        ReentrantLock inputLock = SHARED_RESOURCE_LOCKS.get(SharedClientResource.INPUT);
-        if (inputLock != null && inputLock.isLocked()) return true;
-        if (!backgroundMoves.isEmpty()) return true;
-        for (MacroAction action : persistentActions) {
-            if (action instanceof MoveAction || action instanceof JumpAction || action instanceof SneakAction || action instanceof SprintAction) return true;
-        }
-        synchronized (RUN_LOCK) {
-            for (RunState run : ACTIVE_RUNS.values()) {
-                if (run == null || !run.running.get()) continue;
-                if (!run.backgroundMoves.isEmpty()) return true;
-                for (MacroAction action : run.persistentActions) {
-                    if (action instanceof MoveAction || action instanceof JumpAction || action instanceof SneakAction || action instanceof SprintAction) return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    static void broadcastStepProgress(RunState run, int step, int total, String macroName) {
-        if (run != null && run.options.skipLanProgress()) return;
-        try {
-            autismclient.util.AutismLANSync sync = autismclient.util.AutismLANSync.getInstance();
-            if (sync.isInSession()) {
-                sync.broadcastStepProgress(step, total, macroName);
-            }
-        } catch (Exception ignored) {  }
-    }
-
-    private static void requestStop(RunState run, boolean interruptThread) {
-        if (run == null) return;
-        if (run.running.getAndSet(false)) {
-            RUN_STATE_REVISION.incrementAndGet();
-        }
-        run.persistentActions.clear();
-        for (PrearmedWait wait : new ArrayList<>(run.prearmedWaits.values())) {
-            wait.cleanup();
-        }
-        run.prearmedWaits.clear();
-        releaseBackgroundMoves(run.backgroundMoves, Minecraft.getInstance(), run);
-        run.backgroundMoves.clear();
-        reconcilePersistentInput(Minecraft.getInstance());
-        synchronized (run.packetWaitLock) {
-            if (run.packetFuture != null) run.packetFuture.cancel(true);
-            run.packetFuture = null;
-            run.waitingForPacket.set(false);
-            run.waitingPacketName.set("");
-        }
-        CompletableFuture<Void> chatFuture = run.chatFuture;
-        if (chatFuture != null) chatFuture.cancel(true);
-        run.chatFuture = null;
-        run.waitingForChat.set(false);
-        run.waitingChatAction = null;
-        CompletableFuture<Void> baritoneFuture = run.baritoneGoalFuture;
-        if (baritoneFuture != null) baritoneFuture.cancel(true);
-        run.baritoneGoalFuture = null;
-        run.activeMineTracker = null;
-        Minecraft mc = Minecraft.getInstance();
-        PacketGateManager.clearOwnerAndFlushConfigured(run.id, mc == null ? null : mc.getConnection());
-        FpsLimitController.clear(run.id);
-        PingSpoofController.clearMacro(run.id);
-        MacroRender.cancelRotation(run);
-        MacroWorldActions.requestOwnedBaritoneStop(run, mc);
-        Thread thread = run.macroThread;
-        if (interruptThread && thread != null && thread != Thread.currentThread()) {
-            thread.interrupt();
-        }
-    }
-
-    static void releaseBackgroundMoves(ConcurrentHashMap<MoveAction, int[]> moves, Minecraft mc, RunState owner) {
-        if (moves == null || moves.isEmpty() || mc == null) return;
-        List<MoveAction> toRelease = new ArrayList<>(moves.keySet());
-        mc.execute(() -> {
-            for (MoveAction move : toRelease) {
-                try {
-                    releaseMoveIfUnused(owner, move, mc);
-                } catch (Exception ignored) {  }
-            }
-        });
-    }
-
-    static void releaseMoveIfUnused(RunState owner, MoveAction move, Minecraft mc) {
-        if (move == null || mc == null) return;
-        boolean stillOwned = false;
-        synchronized (RUN_LOCK) {
-            for (RunState active : ACTIVE_RUNS.values()) {
-                if (active == owner || !active.running.get()) continue;
-                for (MoveAction other : active.backgroundMoves.keySet()) {
-                    if (other.direction == move.direction) {
-                        stillOwned = true;
-                        break;
-                    }
-                }
-                if (stillOwned) break;
-            }
-        }
-        if (!stillOwned && owner != null) {
-            for (MoveAction other : backgroundMoves.keySet()) {
-                if (other.direction == move.direction) {
-                    stillOwned = true;
-                    break;
-                }
-            }
-        }
-        if (!stillOwned) move.release(mc);
-    }
-
-    private static void reconcilePersistentInput(Minecraft mc) {
-        if (mc == null) return;
-        mc.execute(() -> {
-            applyAggregateSneakState(mc);
-            applyAggregateSprintState(mc);
-        });
-    }
-
-    static void applyAggregateSneakState(Minecraft mc) {
-        if (mc == null || mc.options == null || mc.options.keyShift == null) return;
-        boolean held = hasPersistentInput(SneakAction.class);
-        mc.options.keyShift.setDown(held);
-    }
-
-    static void applyAggregateSprintState(Minecraft mc) {
-        if (mc == null) return;
-        boolean held = hasPersistentInput(SprintAction.class);
-        if (mc.options != null && mc.options.keySprint != null) mc.options.keySprint.setDown(held);
-        if (mc.player != null) mc.player.setSprinting(held);
-    }
-
-    private static boolean hasPersistentInput(Class<? extends MacroAction> type) {
-        for (MacroAction action : persistentActions) {
-            if (type.isInstance(action)) return true;
-        }
-        synchronized (RUN_LOCK) {
-            for (RunState run : ACTIVE_RUNS.values()) {
-                if (!run.running.get()) continue;
-                for (MacroAction action : run.persistentActions) {
-                    if (type.isInstance(action)) return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static String macroKey(String macroName) {
-        return macroName == null ? "" : macroName.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String macroName(AutismMacro macro) {
-        return macro != null && macro.name != null ? macro.name : "";
-    }
-
-    private static boolean matchesMacro(RunState run, AutismMacro macro, String macroName) {
-        if (run == null || !run.running.get()) return false;
-        if (macro != null && (run.sourceMacro == macro || run.macro == macro)) return true;
-        String targetKey = macroKey(macroName);
-        if (targetKey.isEmpty() && macro != null) targetKey = macroKey(macro.name);
-        return !targetKey.isEmpty() && macroKey(macroName(run.macro)).equals(targetKey);
+        return MacroLifecycle.isControllingInput();
     }
 
     public static void execute(AutismMacro macro) {
-        executeTracked(macro);
+        MacroLifecycle.execute(macro);
     }
 
     public static long executeTracked(AutismMacro macro) {
-        return executeTracked(macro, RunOptions.NORMAL);
+        return MacroLifecycle.executeTracked(macro);
     }
 
     public static long executeTracked(AutismMacro macro, RunOptions options) {
-        if (PackHideState.isHardLocked()) return -1L;
-        RunOptions runOptions = options == null ? RunOptions.NORMAL : options;
-        if (macro == null || macro.actions == null || macro.actions.isEmpty()) {
-            if (runOptions.silentLifecycle()) return -1L;
-            AutismClientMessaging.sendPrefixed("\u00a7cMacro has no actions!");
-            return -1L;
-        }
-
-        AutismMacro executionMacro;
-        try {
-            executionMacro = macro.deepCopy();
-        } catch (Throwable copyError) {
-            if (!runOptions.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7cCould not prepare macro run.");
-            return -1L;
-        }
-        if (executionMacro == null || executionMacro.actions == null || executionMacro.actions.isEmpty()) return -1L;
-
-        RunState runState;
-        synchronized (RUN_LOCK) {
-            String name = macro.name == null ? "" : macro.name;
-            String nameKey = macroKey(name);
-            if (!runOptions.backgroundRun()) {
-                for (RunState active : ACTIVE_RUNS.values()) {
-                    if (active.options.backgroundRun()) continue;
-                    String activeName = active.macro != null && active.macro.name != null ? active.macro.name : "";
-                    if (active.running.get() && macroKey(activeName).equals(nameKey)) {
-                        if (!runOptions.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7eMacro already running: " + name);
-                        return -1L;
-                    }
-                }
-                if (!hasMacroCapacity(activeRunCountLocked())) {
-                    if (!runOptions.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7cOnly " + MAX_CONCURRENT_MACROS + " macros can run at the same time.");
-                    return -1L;
-                }
-            } else if (!hasMacroCapacity(activeRunCountLocked())) {
-                return -1L;
-            }
-            runState = new RunState(NEXT_RUN_ID.getAndIncrement(), macro, executionMacro, runOptions);
-            if (ACTIVE_RUNS.isEmpty()) MacroCaptureAutofill.expireSuggestionCacheAfterIdle();
-            ACTIVE_RUNS.put(runState.id, runState);
-            RUNS_BY_ID.put(runState.id, runState);
-            rebuildActiveRunListLocked();
-            RUN_STATE_REVISION.incrementAndGet();
-            refreshPrimaryRunLocked();
-        }
-        if (!runOptions.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7aStarted macro: " + macro.name);
-
-        broadcastStepProgress(runState, 0, executionMacro.actions.size(), executionMacro.name);
-
-        Thread thread = new Thread(() -> MacroRunLoop.run(runState), "Autism-Macro-" + runState.id);
-        thread.setDaemon(true);
-        macroThread = thread;
-        runState.macroThread = thread;
-        try {
-            thread.start();
-        } catch (Throwable startError) {
-
-            requestStop(runState, false);
-            synchronized (RUN_LOCK) {
-                ACTIVE_RUNS.remove(runState.id);
-                RUNS_BY_ID.remove(runState.id);
-                rebuildActiveRunListLocked();
-                if (ACTIVE_RUNS.isEmpty()) MacroCaptureAutofill.allRunsStoppedAtMs = System.currentTimeMillis();
-                RUN_STATE_REVISION.incrementAndGet();
-                refreshPrimaryRunLocked();
-            }
-            return -1L;
-        }
-        return runState.id;
+        return MacroLifecycle.executeTracked(macro, options);
     }
 
     public static boolean isRunActive(long id) {
-        if (id < 0L) return false;
-        RunState run = RUNS_BY_ID.get(id);
-        return run != null && run.running.get();
+        return MacroLifecycle.isRunActive(id);
     }
 
     public static long runStateRevision() {
-        return RUN_STATE_REVISION.get();
+        return MacroLifecycle.runStateRevision();
     }
 
     public static long currentRunId() {
-        RunState run = CURRENT_RUN.get();
-        return run == null ? -1L : run.id;
+        return MacroLifecycle.currentRunId();
     }
 
     public static void stopRun(long id) {
-        if (id < 0L) return;
-        RunState run;
-        synchronized (RUN_LOCK) {
-            run = ACTIVE_RUNS.get(id);
-        }
-        if (run == null) return;
-        requestStop(run, true);
-        synchronized (RUN_LOCK) {
-            refreshPrimaryRunLocked();
-        }
+        MacroLifecycle.stopRun(id);
     }
+
+    static void stopCurrentActionRun() {
+        MacroLifecycle.stopCurrentActionRun();
+    }
+
 
 
 
@@ -898,13 +343,13 @@ public class MacroExecutor {
 
     public static void stop() {
         String macroName = (currentMacro != null && currentMacro.name != null) ? currentMacro.name : "";
-        for (RunState run : activeRunSnapshot()) {
-            requestStop(run, true);
+        for (RunState run : MacroLifecycle.activeRunSnapshot()) {
+            MacroLifecycle.requestStop(run, true);
         }
         synchronized (RUN_LOCK) {
             ACTIVE_RUNS.clear();
             RUNS_BY_ID.clear();
-            rebuildActiveRunListLocked();
+            MacroLifecycle.rebuildActiveRunListLocked();
             primaryRun = null;
             visibleRunActive = false;
         }
@@ -914,9 +359,9 @@ public class MacroExecutor {
             autismclient.util.AutismContainerHold.releaseAllAndFlush(mcInst == null ? null : mcInst.getConnection());
         } catch (Throwable ignored) {  }
         persistentActions.clear();
-        releaseBackgroundMoves(backgroundMoves, Minecraft.getInstance(), null);
+        MacroLifecycle.releaseBackgroundMoves(backgroundMoves, Minecraft.getInstance(), null);
         backgroundMoves.clear();
-        reconcilePersistentInput(Minecraft.getInstance());
+        MacroLifecycle.reconcilePersistentInput(Minecraft.getInstance());
         MacroConditionRegistry.cancelAll();
         MacroPacketObserve.drainOneShotListeners();
         isWaitingForChat.set(false);
@@ -948,7 +393,7 @@ public class MacroExecutor {
 
         macroThread = null;
         currentMacro = null;
-        setCurrentStatus("");
+        MacroLifecycle.setCurrentStatus("");
         synchronized (ROTATION_STATE_LOCK) {
             ROTATION_OWNER.set(null);
             isRotating.set(false);
@@ -967,7 +412,7 @@ public class MacroExecutor {
 
     public static int getActiveRunCount() {
         synchronized (RUN_LOCK) {
-            return activeRunCountLocked();
+            return MacroLifecycle.activeRunCountLocked();
         }
     }
 
@@ -984,9 +429,9 @@ public class MacroExecutor {
 
     public static boolean isMacroRunning(String macroName) {
         if (macroName == null) return false;
-        String targetKey = macroKey(macroName);
+        String targetKey = MacroLifecycle.macroKey(macroName);
         for (RunState run : RUNS_BY_ID.values()) {
-            if (run.running.get() && macroKey(macroName(run.macro)).equals(targetKey)) return true;
+            if (run.running.get() && MacroLifecycle.macroKey(MacroLifecycle.macroName(run.macro)).equals(targetKey)) return true;
         }
         return false;
     }
@@ -994,7 +439,7 @@ public class MacroExecutor {
     public static boolean isMacroRunning(AutismMacro macro) {
         if (macro == null) return false;
         for (RunState run : RUNS_BY_ID.values()) {
-            if (matchesMacro(run, macro, macro.name)) return true;
+            if (MacroLifecycle.matchesMacro(run, macro, macro.name)) return true;
         }
         return false;
     }
@@ -1022,17 +467,17 @@ public class MacroExecutor {
 
     public static void stopMacro(String macroName) {
         if (macroName == null || macroName.isBlank()) return;
-        String targetKey = macroKey(macroName);
+        String targetKey = MacroLifecycle.macroKey(macroName);
         boolean stopped = false;
-        for (RunState run : activeRunSnapshot()) {
-            if (run.running.get() && macroKey(macroName(run.macro)).equals(targetKey)) {
-                requestStop(run, true);
+        for (RunState run : MacroLifecycle.activeRunSnapshot()) {
+            if (run.running.get() && MacroLifecycle.macroKey(MacroLifecycle.macroName(run.macro)).equals(targetKey)) {
+                MacroLifecycle.requestStop(run, true);
                 stopped = true;
             }
         }
         if (stopped) {
             synchronized (RUN_LOCK) {
-                refreshPrimaryRunLocked();
+                MacroLifecycle.refreshPrimaryRunLocked();
             }
             AutismClientMessaging.sendPrefixed("\u00a7cMacro stopped: " + macroName);
         }
@@ -1041,16 +486,16 @@ public class MacroExecutor {
     public static void stopMacro(AutismMacro macro) {
         if (macro == null) return;
         boolean stopped = false;
-        String displayName = macroName(macro);
-        for (RunState run : activeRunSnapshot()) {
-            if (matchesMacro(run, macro, displayName)) {
-                requestStop(run, true);
+        String displayName = MacroLifecycle.macroName(macro);
+        for (RunState run : MacroLifecycle.activeRunSnapshot()) {
+            if (MacroLifecycle.matchesMacro(run, macro, displayName)) {
+                MacroLifecycle.requestStop(run, true);
                 stopped = true;
             }
         }
         if (stopped) {
             synchronized (RUN_LOCK) {
-                refreshPrimaryRunLocked();
+                MacroLifecycle.refreshPrimaryRunLocked();
             }
             AutismClientMessaging.sendPrefixed("\u00a7cMacro stopped: " + (displayName.isBlank() ? "macro" : displayName));
         }

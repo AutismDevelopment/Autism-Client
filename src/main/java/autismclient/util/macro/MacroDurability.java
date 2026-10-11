@@ -15,7 +15,7 @@ final class MacroDurability {
     public static void waitForDurabilityUseNext(Minecraft mc, WaitDurabilityAction action) throws InterruptedException {
         AtomicReference<DurabilityUseNextSession> sessionRef = new AtomicReference<>();
         long start = System.currentTimeMillis();
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> tickDurabilityUseNext(mc, action, sessionRef), Boolean.FALSE))) {
                 return;
             }

@@ -92,7 +92,7 @@ final class MacroRace {
 
     public static void waitForMacroStep(WaitForMacroStepAction action) {
         long startMs = System.currentTimeMillis();
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             if (isMacroStepSatisfied(action)) return;
             if (action.timeoutMs > 0 && System.currentTimeMillis() - startMs >= action.timeoutMs) return;
             CompletableFuture<Void> tick = MacroConditionRegistry.waitForNextTick();
@@ -129,7 +129,7 @@ final class MacroRace {
             else if (RaceAction.isBodyAction(child)) bodyActions.add(child);
         }
 
-        MacroExecutor.setCurrentStatus(conditions.isEmpty()
+        MacroLifecycle.setCurrentStatus(conditions.isEmpty()
             ? "Race: dispatching"
             : "Race: waiting for " + (conditions.size() == 1 ? conditions.get(0).getDisplayName() : conditions.size() + " conditions"));
 
@@ -154,11 +154,11 @@ final class MacroRace {
             triggerFuture.cancel(true);
             bodyFuture.cancel(true);
             AutismClientMessaging.sendPrefixed("\u00A7eRace timed out: " + (race.label == null || race.label.isBlank() ? "Race" : race.label));
-            MacroExecutor.setCurrentStatus("Race: timeout");
+            MacroLifecycle.setCurrentStatus("Race: timeout");
             return bodyCount;
         }
 
-        MacroExecutor.setCurrentStatus("Race: fired");
+        MacroLifecycle.setCurrentStatus("Race: fired");
         waitForTimedFuture(bodyFuture, 250);
         return bodyCount;
     }
@@ -208,7 +208,7 @@ final class MacroRace {
     public static int runReportGroup(Minecraft mc, java.util.List<MacroAction> actions, int headerIndex, ReportAction report) throws InterruptedException {
         int conditionCount = report.normalizedConditionCount(actions, headerIndex);
         if (conditionCount < 2 || headerIndex + 2 >= actions.size()) {
-            MacroExecutor.setCurrentStatus(report.getDisplayName());
+            MacroLifecycle.setCurrentStatus(report.getDisplayName());
             report.execute(mc);
             return conditionCount;
         }
@@ -218,13 +218,13 @@ final class MacroRace {
         if (RaceAction.isBodyAction(startCondition) && RaceAction.isConditionAction(endCondition)) {
             int timeoutMs = Math.max(100, report.timeoutMs);
             String label = report.reportLabel == null || report.reportLabel.isBlank() ? "Report" : report.reportLabel.trim();
-            MacroExecutor.setCurrentStatus("Report: start " + startCondition.getDisplayName());
+            MacroLifecycle.setCurrentStatus("Report: start " + startCondition.getDisplayName());
             CompletableFuture<MacroExecutor.MacroEvent> startAnchor = startActionAnchorFuture(startCondition);
             MacroDispatcher.executeSingleActionWithWaits(mc, startCondition, null);
-            if (!MacroExecutor.isCurrentRunActive()) return conditionCount;
+            if (!MacroLifecycle.isCurrentRunActive()) return conditionCount;
             MacroExecutor.MacroEvent startEvent = waitForAnchorOrNow(startAnchor, 250, startCondition.getDisplayName(), "client action");
 
-            MacroExecutor.setCurrentStatus("Report: waiting end " + endCondition.getDisplayName());
+            MacroLifecycle.setCurrentStatus("Report: waiting end " + endCondition.getDisplayName());
             CompletableFuture<MacroExecutor.MacroEvent> endFuture = timedConditionFuture(mc, endCondition);
             MacroExecutor.MacroEvent endEvent = waitForTimedEvent(endFuture, timeoutMs);
             if (endEvent == null) {
@@ -251,7 +251,7 @@ final class MacroRace {
 
         int timeoutMs = Math.max(100, report.timeoutMs);
         long startWaitNanos = System.nanoTime();
-        MacroExecutor.setCurrentStatus("Report: waiting start " + startCondition.getDisplayName());
+        MacroLifecycle.setCurrentStatus("Report: waiting start " + startCondition.getDisplayName());
         boolean startFired = waitForMacroCondition(mc, startCondition, timeoutMs);
         if (!startFired) {
             AutismClientMessaging.sendPrefixed("\u00A7eReport \"" + report.reportLabel + "\": timeout waiting for start condition");
@@ -261,7 +261,7 @@ final class MacroRace {
         MacroExecutor.MacroEvent startEvent = new MacroExecutor.MacroEvent(null, "condition " + startCondition.getDisplayName(), System.nanoTime(), null);
         long spentMs = (startEvent.nanoTime() - startWaitNanos) / 1_000_000L;
         int remainingMs = (int) Math.max(1, timeoutMs - spentMs);
-        MacroExecutor.setCurrentStatus("Report: waiting end " + endCondition.getDisplayName());
+        MacroLifecycle.setCurrentStatus("Report: waiting end " + endCondition.getDisplayName());
         CompletableFuture<MacroExecutor.MacroEvent> endFuture = timedConditionFuture(mc, endCondition);
         MacroExecutor.MacroEvent endEvent = waitForTimedEvent(endFuture, remainingMs);
         if (endEvent == null) {
@@ -318,7 +318,7 @@ final class MacroRace {
 
         if (multi.connectIfDown) {
             if (!manager.isActive()) {
-                MacroExecutor.setCurrentStatus("Multi: starting batch");
+                MacroLifecycle.setCurrentStatus("Multi: starting batch");
                 autismclient.util.multi.MultiManager.StartResult started = manager.start(profile);
                 if (!started.ok()) {
 
@@ -335,17 +335,17 @@ final class MacroRace {
                 }
             }
         }
-        if (!MacroExecutor.isCurrentRunActive()) return stepCount;
+        if (!MacroLifecycle.isCurrentRunActive()) return stepCount;
 
         int waitMs = Math.max(0, multi.waitMs);
         if (MultiAction.WAIT_UNTIL_READY.equals(multi.waitMode)) {
-            MacroExecutor.setCurrentStatus("Multi: waiting for " + scope.size() + (scope.size() == 1 ? " account" : " accounts"));
+            MacroLifecycle.setCurrentStatus("Multi: waiting for " + scope.size() + (scope.size() == 1 ? " account" : " accounts"));
             multiWaitUntilReady(manager, scope, waitMs);
         } else if (MultiAction.WAIT_FIXED_DELAY.equals(multi.waitMode) && waitMs > 0) {
-            MacroExecutor.setCurrentStatus("Multi: delay " + waitMs + " ms");
+            MacroLifecycle.setCurrentStatus("Multi: delay " + waitMs + " ms");
             multiSleepCancellable(waitMs);
         }
-        if (!MacroExecutor.isCurrentRunActive()) return stepCount;
+        if (!MacroLifecycle.isCurrentRunActive()) return stepCount;
 
         AutismMacro subMacro = new AutismMacro();
         subMacro.name = (macroName == null || macroName.isBlank() ? "Macro" : macroName) + " (Multi)";
@@ -356,13 +356,13 @@ final class MacroRace {
             if (copy != null) subMacro.actions.add(copy);
         }
 
-        MacroExecutor.setCurrentStatus("Multi: running on " + scope.size() + (scope.size() == 1 ? " account" : " accounts"));
+        MacroLifecycle.setCurrentStatus("Multi: running on " + scope.size() + (scope.size() == 1 ? " account" : " accounts"));
         autismclient.util.multi.MultiManager.BroadcastResult result = manager.runMacroDirect(subMacro, scope);
         AutismClientMessaging.sendPrefixed("\u00A7bMulti: " + result.summary());
 
-        MacroExecutor.setCurrentStatus("Multi: waiting for completion");
+        MacroLifecycle.setCurrentStatus("Multi: waiting for completion");
         multiWaitForCompletion(manager, scope, subMacro.name);
-        if (!MacroExecutor.isCurrentRunActive()) return stepCount;
+        if (!MacroLifecycle.isCurrentRunActive()) return stepCount;
 
         if (multi.disconnectAfter) {
             for (String accountId : scope) {
@@ -386,14 +386,14 @@ final class MacroRace {
         long deadline = System.nanoTime() + Math.max(0L, totalMs) * 1_000_000L;
         long remaining;
         while ((remaining = deadline - System.nanoTime()) > 0L) {
-            if (!MacroExecutor.isCurrentRunActive()) return;
+            if (!MacroLifecycle.isCurrentRunActive()) return;
             Thread.sleep(Math.min(100L, Math.max(1L, remaining / 1_000_000L)));
         }
     }
 
     private static void multiWaitUntilReady(autismclient.util.multi.MultiManager manager, java.util.Set<String> scope, long timeoutMs) throws InterruptedException {
         long deadline = System.nanoTime() + Math.max(0L, timeoutMs) * 1_000_000L;
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             boolean allReady = true;
             java.util.Map<String, autismclient.util.multi.MultiSession.Snapshot> byId = multiSnapshotsById(manager);
             for (String accountId : scope) {
@@ -415,7 +415,7 @@ final class MacroRace {
     private static void multiWaitForCompletion(autismclient.util.multi.MultiManager manager, java.util.Set<String> scope, String subMacroName) throws InterruptedException {
         long deadline = System.nanoTime() + 10L * 60L * 1_000_000_000L;
         Thread.sleep(200L);
-        while (MacroExecutor.isCurrentRunActive()) {
+        while (MacroLifecycle.isCurrentRunActive()) {
             boolean anyPending = false;
             java.util.Map<String, autismclient.util.multi.MultiSession.Snapshot> byId = multiSnapshotsById(manager);
             for (String accountId : scope) {
@@ -464,7 +464,7 @@ final class MacroRace {
             if (run != null) MacroExecutor.CURRENT_RUN.set(run);
             EnumSet<SharedClientResource> heldResources = EnumSet.noneOf(SharedClientResource.class);
             try {
-                heldResources = MacroExecutor.acquireClientResources(MacroExecutor.resourcesForActions(bodyActions));
+                heldResources = MacroLifecycle.acquireClientResources(MacroLifecycle.resourcesForActions(bodyActions));
                 Throwable firstFailure = null;
                 for (MacroAction body : bodyActions) {
                     if (body == null || !body.isEnabled() || !RaceAction.isBodyAction(body)) continue;
@@ -490,7 +490,7 @@ final class MacroRace {
                 AutismClientMessaging.sendPrefixed("\u00A7cRace action failed: " + safeThrowableMessage(t));
                 bodyFuture.completeExceptionally(t);
             } finally {
-                MacroExecutor.releaseClientResources(heldResources);
+                MacroLifecycle.releaseClientResources(heldResources);
                 if (previous != null) MacroExecutor.CURRENT_RUN.set(previous);
                 else MacroExecutor.CURRENT_RUN.remove();
             }
@@ -564,7 +564,7 @@ final class MacroRace {
         try {
             if (timeoutMs <= 0) future.get();
             else future.get(timeoutMs, TimeUnit.MILLISECONDS);
-            return !future.isCancelled() && MacroExecutor.isCurrentRunActive();
+            return !future.isCancelled() && MacroLifecycle.isCurrentRunActive();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
@@ -594,7 +594,7 @@ final class MacroRace {
             return CompletableFuture.completedFuture(new MacroExecutor.MacroEvent(null, "condition", System.nanoTime(), null));
         }
         if (trigger instanceof WaitForChatAction chat) {
-            MacroVariableContext context = MacroExecutor.currentVariableContext();
+            MacroVariableContext context = MacroLifecycle.currentVariableContext();
             java.util.concurrent.atomic.AtomicReference<java.util.Map<String, MacroValue>> captures =
                 new java.util.concurrent.atomic.AtomicReference<>(java.util.Map.of());
             MacroPacketObserve.TimedOneShotPacketListener listener = MacroPacketObserve.awaitTimedReceive((packet, direction, now) -> {
@@ -693,7 +693,7 @@ final class MacroRace {
         if (base == null) {
             CompletableFuture<MacroExecutor.MacroEvent> done = new CompletableFuture<>();
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-            mc.execute(() -> MacroExecutor.withRunContext(run, () -> {
+            mc.execute(() -> MacroLifecycle.withRunContext(run, () -> {
                 try {
                     MacroDispatcher.executeSingleActionWithWaits(mc, trigger, null);
                     done.complete(new MacroExecutor.MacroEvent(null, trigger.getDisplayName(), System.nanoTime(), null));
@@ -726,10 +726,10 @@ final class MacroRace {
         }
         if (trigger instanceof DelayAction delay) {
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-            return CompletableFuture.runAsync(() -> MacroExecutor.withRunContext(run, () -> {
+            return CompletableFuture.runAsync(() -> MacroLifecycle.withRunContext(run, () -> {
                 try {
                     if (delay.useTicks) {
-                        for (int i = 0; i < delay.delayTicks && MacroExecutor.isCurrentRunActive(); i++) {
+                        for (int i = 0; i < delay.delayTicks && MacroLifecycle.isCurrentRunActive(); i++) {
                             MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick());
                         }
                     } else {
@@ -743,11 +743,11 @@ final class MacroRace {
         if (trigger instanceof WaitForGuiAction gui) {
             CompletableFuture<MacroExecutor.MacroEvent> done = new CompletableFuture<>();
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-            Thread worker = new Thread(() -> MacroExecutor.withRunContext(run, () -> {
+            Thread worker = new Thread(() -> MacroLifecycle.withRunContext(run, () -> {
                 long start = System.currentTimeMillis();
                 boolean saw = false;
                 java.util.Map<String, MacroValue> observed = java.util.Map.of();
-                while (!done.isDone() && MacroExecutor.isCurrentRunActive()) {
+                while (!done.isDone() && MacroLifecycle.isCurrentRunActive()) {
                     var captured = gui.captureGui(Minecraft.getInstance().gui.screen());
                     if (captured.isPresent()) {
                         saw = true;
@@ -773,7 +773,7 @@ final class MacroRace {
             return done;
         }
         if (trigger instanceof WaitForChatAction chat) {
-            MacroVariableContext context = MacroExecutor.currentVariableContext();
+            MacroVariableContext context = MacroLifecycle.currentVariableContext();
             MacroExecutor.OneShotPacketListener listener = MacroExecutor.awaitReceive(packet -> {
                 MacroExecutor.ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
                 return capture != null && MacroChatObserve.captureChatAction(chat, capture, context).isPresent();
@@ -900,7 +900,7 @@ final class MacroRace {
         }
         if (trigger instanceof RevisionSyncAction) {
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-            return CompletableFuture.runAsync(() -> MacroExecutor.withRunContext(run, () -> {
+            return CompletableFuture.runAsync(() -> MacroLifecycle.withRunContext(run, () -> {
                 try {
                     MacroDispatcher.executeSingleActionWithWaits(mc, trigger, null);
                 } catch (InterruptedException e) {
@@ -916,11 +916,11 @@ final class MacroRace {
         long start = System.nanoTime();
         long timeoutNanos = timeoutMs <= 0 ? Long.MAX_VALUE : timeoutMs * 1_000_000L;
         future.whenComplete((v, e) -> java.util.concurrent.locks.LockSupport.unpark(t));
-        while (!future.isDone() && MacroExecutor.isCurrentRunActive()) {
+        while (!future.isDone() && MacroLifecycle.isCurrentRunActive()) {
             if (System.nanoTime() - start >= timeoutNanos) break;
             java.util.concurrent.locks.LockSupport.parkNanos(MacroExecutor.MACRO_WAIT_POLL_NANOS);
             if (Thread.interrupted()) break;
         }
-        return future.isDone() && !future.isCancelled() && MacroExecutor.isCurrentRunActive();
+        return future.isDone() && !future.isCancelled() && MacroLifecycle.isCurrentRunActive();
     }
 }

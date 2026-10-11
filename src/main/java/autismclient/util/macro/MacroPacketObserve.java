@@ -147,7 +147,7 @@ final class MacroPacketObserve {
         if (PackHideState.isHardLocked()) return;
         MacroChatObserve.syncRecentChatServerContext();
 
-        java.util.List<MacroExecutor.RunState> runs = MacroExecutor.activeRunSnapshot();
+        java.util.List<MacroExecutor.RunState> runs = MacroLifecycle.activeRunSnapshot();
         boolean s2c = "S2C".equals(direction);
         boolean chatWork = false;
         boolean mineWork = false;
@@ -174,7 +174,7 @@ final class MacroPacketObserve {
                         if (f != null) f.complete(null);
                     }
                 }
-                if (MacroExecutor.isCurrentRunActive() && MacroExecutor.isWaitingForChat.get() && MacroChatObserve.matchesWaitingChat(capture)) {
+                if (MacroLifecycle.isCurrentRunActive() && MacroExecutor.isWaitingForChat.get() && MacroChatObserve.matchesWaitingChat(capture)) {
                     MacroExecutor.lastMatchedChat.set(capture.displayText());
                     CompletableFuture<Void> f = MacroExecutor.activeChatFuture;
                     if (f != null) f.complete(null);
@@ -190,7 +190,7 @@ final class MacroPacketObserve {
             }
         }
 
-        if (!MacroExecutor.isCurrentRunActive()) return;
+        if (!MacroLifecycle.isCurrentRunActive()) return;
 
         if (packetWork) {
             for (MacroExecutor.RunState run : runs) {

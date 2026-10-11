@@ -14,7 +14,7 @@ final class MacroClientThread {
     static void runOnClientThread(Minecraft mc, Runnable runnable) throws InterruptedException {
         if (PackHideState.isHardLocked()) return;
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
-        Runnable contextual = () -> MacroExecutor.withRunContext(scheduledRun, runnable);
+        Runnable contextual = () -> MacroLifecycle.withRunContext(scheduledRun, runnable);
         if (mc.isSameThread()) {
             if (PackHideState.isHardLocked()) return;
             contextual.run();
@@ -48,14 +48,14 @@ final class MacroClientThread {
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
         mc.execute(() -> {
             if (PackHideState.isHardLocked()) return;
-            MacroExecutor.withRunContext(scheduledRun, runnable);
+            MacroLifecycle.withRunContext(scheduledRun, runnable);
         });
     }
 
     static void runOnClientTick(Minecraft mc, Runnable runnable) throws InterruptedException {
         if (PackHideState.isHardLocked()) return;
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
-        Runnable contextual = () -> MacroExecutor.withRunContext(scheduledRun, runnable);
+        Runnable contextual = () -> MacroLifecycle.withRunContext(scheduledRun, runnable);
 
         if (mc.isSameThread()) {
             if (PackHideState.isHardLocked()) return;
@@ -97,7 +97,7 @@ final class MacroClientThread {
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
         java.util.function.Supplier<T> contextual = () -> {
             AtomicReference<T> value = new AtomicReference<>(fallback);
-            MacroExecutor.withRunContext(scheduledRun, () -> value.set(supplier.get()));
+            MacroLifecycle.withRunContext(scheduledRun, () -> value.set(supplier.get()));
             return value.get();
         };
         if (mc.isSameThread()) {
@@ -130,7 +130,7 @@ final class MacroClientThread {
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
         java.util.function.Supplier<T> contextual = () -> {
             AtomicReference<T> value = new AtomicReference<>(fallback);
-            MacroExecutor.withRunContext(scheduledRun, () -> value.set(supplier.get()));
+            MacroLifecycle.withRunContext(scheduledRun, () -> value.set(supplier.get()));
             return value.get();
         };
         if (mc.isSameThread()) {

@@ -22,9 +22,9 @@ final class MacroPrearm {
     public static CompletableFuture<Void> predicateFuture(java.util.function.BooleanSupplier predicate, int timeoutMs) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        Thread worker = new Thread(() -> MacroExecutor.withRunContext(run, () -> {
+        Thread worker = new Thread(() -> MacroLifecycle.withRunContext(run, () -> {
             long start = System.currentTimeMillis();
-            while (!future.isDone() && MacroExecutor.isCurrentRunActive()) {
+            while (!future.isDone() && MacroLifecycle.isCurrentRunActive()) {
                 try {
                     if (predicate.getAsBoolean()) {
                         future.complete(null);
@@ -400,9 +400,9 @@ final class MacroPrearm {
         java.util.concurrent.atomic.AtomicBoolean active = new java.util.concurrent.atomic.AtomicBoolean(true);
         CompletableFuture<Void> future = new CompletableFuture<>();
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        Thread worker = new Thread(() -> MacroExecutor.withRunContext(run, () -> {
+        Thread worker = new Thread(() -> MacroLifecycle.withRunContext(run, () -> {
             long start = System.currentTimeMillis();
-            while (active.get() && MacroExecutor.isCurrentRunActive() && !future.isDone()) {
+            while (active.get() && MacroLifecycle.isCurrentRunActive() && !future.isDone()) {
                 try {
                     if (predicate.getAsBoolean()) {
                         future.complete(null);
