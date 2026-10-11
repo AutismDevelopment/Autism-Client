@@ -80,7 +80,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class MacroExecutor {
 
-    private static final long MACRO_WAIT_POLL_NANOS = 500_000L;
+    static final long MACRO_WAIT_POLL_NANOS = 500_000L;
 
     static final long CAPTURE_SETTLE_MS = 300L;
     private static final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -203,7 +203,7 @@ public class MacroExecutor {
         }
     }
 
-    private static final class PrearmedWait {
+    static final class PrearmedWait {
         final MacroAction action;
         final CompletableFuture<?> future;
         final Runnable cleanup;
@@ -986,7 +986,7 @@ public class MacroExecutor {
 
                     if (!MacroDynamicBindings.apply(action, mc)) continue;
                     if (!dynamicTextInputsAvailable(action, mc)) continue;
-                    if (!hasPrearmedWait(action)) clearOwnCaptureOutput(action);
+                    if (!MacroPrearm.hasPrearmedWait(action)) MacroPrearm.clearOwnCaptureOutput(action);
 
                     if (action instanceof BranchAction branch) {
                         boolean branchMatches = branch.matches(mc);
@@ -1039,7 +1039,7 @@ public class MacroExecutor {
                         continue;
                     }
 
-                    prearmNextActionWait(mc, macro.actions, i);
+                    MacroPrearm.prearmNextActionWait(mc, macro.actions, i);
 
                     EnumSet<SharedClientResource> heldResources = acquireClientResources(action);
                     try {
@@ -1157,7 +1157,7 @@ public class MacroExecutor {
                             packetRun.lastMatchedPacketDirection = "";
                         }
                         java.util.List<String> targets = packetAction.effectiveList();
-                        PrearmedWait prearmed = consumePrearmedWait(action);
+                        PrearmedWait prearmed = MacroPrearm.consumePrearmedWait(action);
                         int startTarget = 0;
                         if (prearmed != null) {
                             try {
@@ -1175,50 +1175,50 @@ public class MacroExecutor {
                                 MacroPacketWait.awaitPacket(targets.get(targetIndex));
                             }
                         }
-                        copyLastMatchedPacket(packetAction);
+                        MacroPrearm.copyLastMatchedPacket(packetAction);
                     }
                     else if (action instanceof WaitPacketMatchAction wpma) {
                         setCurrentStatus(wpma.getDisplayName());
-                        if (!waitForPrearmed(wpma, wpma.timeoutMs)) waitForPacketMatch(wpma);
+                        if (!MacroPrearm.waitForPrearmed(wpma, wpma.timeoutMs)) MacroPrearm.waitForPacketMatch(wpma);
                     }
                     else if (action instanceof WaitInventoryPredicateAction wipa) {
                         setCurrentStatus(wipa.getDisplayName());
-                        if (!waitForPrearmed(wipa, wipa.timeoutMs)) waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
+                        if (!MacroPrearm.waitForPrearmed(wipa, wipa.timeoutMs)) waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
                     }
                     else if (action instanceof WaitDurabilityAction wda) {
                         setCurrentStatus(wda.getDisplayName());
                         if (wda.useNext) MacroDurability.waitForDurabilityUseNext(mc, wda);
-                        else if (!waitForPrearmed(wda, wda.timeoutMs)) waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
+                        else if (!MacroPrearm.waitForPrearmed(wda, wda.timeoutMs)) waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
                     }
                     else if (action instanceof WaitFreeSlotsAction wfsa) {
                         setCurrentStatus(wfsa.getDisplayName());
-                        if (!waitForPrearmed(wfsa, wfsa.timeoutMs)) waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
+                        if (!MacroPrearm.waitForPrearmed(wfsa, wfsa.timeoutMs)) waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
                     }
                     else if (action instanceof WaitEntityTargetAction weta) {
                         setCurrentStatus(weta.getDisplayName());
-                        if (!waitForPrearmed(weta, weta.timeoutMs)) waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
+                        if (!MacroPrearm.waitForPrearmed(weta, weta.timeoutMs)) waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
                     }
                     else if (action instanceof WaitGuiTypeAction wgta) {
                         setCurrentStatus(wgta.getDisplayName());
-                        if (!hasPrearmedWait(wgta)) clearCaptureOutputs(wgta);
-                        if (waitForPrearmed(wgta, wgta.timeoutMs)) {
+                        if (!MacroPrearm.hasPrearmedWait(wgta)) MacroPrearm.clearCaptureOutputs(wgta);
+                        if (MacroPrearm.waitForPrearmed(wgta, wgta.timeoutMs)) {
                         } else if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) {
                             waitForPredicate(guiClosePredicate(wgta, mc), wgta.timeoutMs);
-                            commitStagedCapture(wgta);
+                            MacroPrearm.commitStagedCapture(wgta);
                         } else {
                             waitForPredicate(() -> {
                                 var captured = wgta.capture(mc);
-                                captured.ifPresent(values -> stageCapture(wgta, values));
+                                captured.ifPresent(values -> MacroPrearm.stageCapture(wgta, values));
                                 return captured.isPresent();
                             }, wgta.timeoutMs);
-                            commitStagedCapture(wgta);
+                            MacroPrearm.commitStagedCapture(wgta);
                         }
                     }
                     else if (action instanceof WaitForHealthAction) {
                         WaitForHealthAction wh = (WaitForHealthAction) action;
                         setCurrentStatus(wh.waitingStatusText());
                         try {
-                            if (!waitForPrearmed(wh, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wh, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForHealth(
                                     wh.healthThreshold, wh.below);
                                 waitForCondition(future);
@@ -1229,7 +1229,7 @@ public class MacroExecutor {
                         WaitForBlockAction wba = (WaitForBlockAction) action;
                         setCurrentStatus(wba.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wba, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wba, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForBlock(wba);
                                 waitForCondition(future);
                             }
@@ -1237,20 +1237,20 @@ public class MacroExecutor {
                     }
                     else if (action instanceof WaitForGuiAction) {
                         WaitForGuiAction wga = (WaitForGuiAction) action;
-                        if (!hasPrearmedWait(wga)) clearCaptureOutputs(wga);
-                        if (waitForPrearmed(wga, 0)) {
+                        if (!MacroPrearm.hasPrearmedWait(wga)) MacroPrearm.clearCaptureOutputs(wga);
+                        if (MacroPrearm.waitForPrearmed(wga, 0)) {
                         } else if (wga.waitMode == WaitForGuiAction.WaitMode.CLOSE) {
                             setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
                             waitForPredicate(guiClosePredicate(wga, mc), wga.timeoutMs);
-                            commitStagedCapture(wga);
+                            MacroPrearm.commitStagedCapture(wga);
                         } else {
                             setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
                             waitForPredicate(() -> {
                                 var captured = wga.captureGui(mc.gui.screen());
-                                captured.ifPresent(values -> stageCapture(wga, values));
+                                captured.ifPresent(values -> MacroPrearm.stageCapture(wga, values));
                                 return captured.isPresent();
                             }, wga.timeoutMs);
-                            commitStagedCapture(wga);
+                            MacroPrearm.commitStagedCapture(wga);
                         }
                     }
                     else if (action instanceof WaitForCooldownAction) {
@@ -1261,7 +1261,7 @@ public class MacroExecutor {
                         setCurrentStatus("Waiting for cooldown: " +
                             (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
                         try {
-                            if (!waitForPrearmed(wca, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wca, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForCooldown(cooldownTarget, wca.checkMainInteractionHand);
                                 waitForCondition(future);
                             }
@@ -1271,7 +1271,7 @@ public class MacroExecutor {
                         WaitPosAction wpa = (WaitPosAction) action;
                         setCurrentStatus("Waiting for Pos: " + String.format("%.0f, %.0f, %.0f", wpa.x, wpa.y, wpa.z));
                         try {
-                            if (!waitForPrearmed(wpa, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wpa, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPos(
                                     wpa.x, wpa.y, wpa.z, wpa.leeway, wpa.checkRotation, wpa.yaw, wpa.pitch, wpa.rotLeeway);
                                 waitForCondition(future);
@@ -1470,13 +1470,13 @@ public class MacroExecutor {
                     else if (action instanceof WaitForChatAction) {
                         WaitForChatAction wca = (WaitForChatAction) action;
                         setCurrentStatus("Waiting for chat: " + wca.pattern);
-                        if (!waitForPrearmed(wca, wca.timeoutMs)) MacroPacketWait.awaitChat(wca);
+                        if (!MacroPrearm.waitForPrearmed(wca, wca.timeoutMs)) MacroPacketWait.awaitChat(wca);
                     }
                     else if (action instanceof WaitForEntityAction) {
                         WaitForEntityAction wea = (WaitForEntityAction) action;
                         setCurrentStatus(wea.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wea, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wea, 0)) {
                                 waitForPredicate(() -> wea.matchesEntityTarget(mc), wea.timeoutMs);
                             }
                         } catch (CancellationException e) {  }
@@ -1486,7 +1486,7 @@ public class MacroExecutor {
                         String sndDesc = wsa.soundIds.isEmpty() ? "any" : wsa.soundIds.get(0);
                         setCurrentStatus("Waiting for sound: " + sndDesc);
                         try {
-                            if (!waitForPrearmed(wsa, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wsa, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSound(wsa);
                                 waitForCondition(future);
                             }
@@ -1513,7 +1513,7 @@ public class MacroExecutor {
                         WaitForSlotChangeAction wsca = (WaitForSlotChangeAction) action;
                         setCurrentStatus(wsca.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wsca, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wsca, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSlotChange(wsca);
                                 waitForCondition(future);
                             }
@@ -1522,7 +1522,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitForWorldChangeAction world) {
                         setCurrentStatus(world.getDisplayName());
                         try {
-                            if (!waitForPrearmed(world, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(world, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForWorldChange(world);
                                 waitForCondition(future);
                             }
@@ -1531,7 +1531,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitForPositionDeltaAction wpda) {
                         setCurrentStatus(wpda.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wpda, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wpda, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPositionDelta(wpda.distance, wpda.horizontalOnly);
                                 waitForCondition(future);
                             }
@@ -1540,7 +1540,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitForTeleportAction teleport) {
                         setCurrentStatus(teleport.getDisplayName());
                         try {
-                            if (!waitForPrearmed(teleport, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(teleport, 0)) {
                                 CompletableFuture<?> future = raceConditionFuture(mc, teleport);
                                 waitForFutureDone(future, 0);
                             }
@@ -1549,7 +1549,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitGamemodeChangeAction gm) {
                         setCurrentStatus(gm.getDisplayName());
                         try {
-                            if (!waitForPrearmed(gm, gm.timeoutMs)) {
+                            if (!MacroPrearm.waitForPrearmed(gm, gm.timeoutMs)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForGamemodeChange(gm);
                                 waitForFutureDone(future, gm.timeoutMs);
                             }
@@ -1558,7 +1558,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitMovementAction wm) {
                         setCurrentStatus(wm.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wm, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wm, 0)) {
                                 CompletableFuture<?> future = raceConditionFuture(mc, wm.resolveSubAction());
                                 waitForFutureDone(future, 0);
                             }
@@ -1568,7 +1568,7 @@ public class MacroExecutor {
                         WaitForLanStepAction wla = (WaitForLanStepAction) action;
                         setCurrentStatus(wla.getDisplayName());
                         try {
-                            if (!waitForPrearmed(wla, 0)) {
+                            if (!MacroPrearm.waitForPrearmed(wla, 0)) {
                                 CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(wla);
                                 waitForCondition(future);
                             }
@@ -1577,7 +1577,7 @@ public class MacroExecutor {
                     else if (action instanceof WaitForMacroStepAction) {
                         WaitForMacroStepAction wma = (WaitForMacroStepAction) action;
                         setCurrentStatus(wma.getDisplayName());
-                        if (!waitForPrearmed(wma, wma.timeoutMs)) waitForMacroStep(wma);
+                        if (!MacroPrearm.waitForPrearmed(wma, wma.timeoutMs)) waitForMacroStep(wma);
                     }
                     else if (action instanceof StopMacroAction) {
                         setCurrentStatus("Stopping Macro");
@@ -1922,7 +1922,7 @@ public class MacroExecutor {
                         }
                     }
 
-                    commitConditionOutput(action, mc);
+                    MacroPrearm.commitConditionOutput(action, mc);
 
                     if (postGuiFuture != null && isCurrentRunActive()) {
                         try {
@@ -2085,13 +2085,13 @@ public class MacroExecutor {
         }
     }
 
-    private static java.util.function.BooleanSupplier guiClosePredicate(WaitForGuiAction action, Minecraft mc) {
+    static java.util.function.BooleanSupplier guiClosePredicate(WaitForGuiAction action, Minecraft mc) {
         AtomicBoolean sawMatchingGui = new AtomicBoolean(action.checkGui(mc));
         return () -> {
             var capture = mc == null ? java.util.Optional.<java.util.Map<String, MacroValue>>empty() : action.captureGui(mc.gui.screen());
             boolean matches = capture.isPresent();
             if (matches) {
-                capture.ifPresent(values -> stageCapture(action, values));
+                capture.ifPresent(values -> MacroPrearm.stageCapture(action, values));
                 sawMatchingGui.set(true);
                 return false;
             }
@@ -2099,13 +2099,13 @@ public class MacroExecutor {
         };
     }
 
-    private static java.util.function.BooleanSupplier guiClosePredicate(WaitGuiTypeAction action, Minecraft mc) {
+    static java.util.function.BooleanSupplier guiClosePredicate(WaitGuiTypeAction action, Minecraft mc) {
         AtomicBoolean sawMatchingGui = new AtomicBoolean(action.matches(mc));
         return () -> {
             var capture = action.capture(mc);
             boolean matches = capture.isPresent();
             if (matches) {
-                capture.ifPresent(values -> stageCapture(action, values));
+                capture.ifPresent(values -> MacroPrearm.stageCapture(action, values));
                 sawMatchingGui.set(true);
                 return false;
             }
@@ -2114,502 +2114,6 @@ public class MacroExecutor {
     }
 
 
-    private static CompletableFuture<Void> predicateFuture(java.util.function.BooleanSupplier predicate, int timeoutMs) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        RunState run = CURRENT_RUN.get();
-        Thread worker = new Thread(() -> withRunContext(run, () -> {
-            long start = System.currentTimeMillis();
-            while (!future.isDone() && isCurrentRunActive()) {
-                try {
-                    if (predicate.getAsBoolean()) {
-                        future.complete(null);
-                        return;
-                    }
-                } catch (Throwable ignored) {  }
-                if (timeoutMs > 0 && System.currentTimeMillis() - start >= timeoutMs) {
-                    future.complete(null);
-                    return;
-                }
-                java.util.concurrent.locks.LockSupport.parkNanos(MACRO_WAIT_POLL_NANOS);
-                if (Thread.interrupted()) return;
-            }
-        }), "MacroPredicateWait");
-        worker.setDaemon(true);
-        worker.start();
-        future.whenComplete((v, e) -> worker.interrupt());
-        return future;
-    }
-
-    private static void prearmNextActionWait(Minecraft mc, java.util.List<MacroAction> actions, int currentIndex) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || actions == null) return;
-        int nextIndex = currentIndex + 1;
-        if (nextIndex < 0 || nextIndex >= actions.size()) return;
-        MacroAction next = actions.get(nextIndex);
-        if (next == null || !next.isEnabled() || !next.listensDuringPreviousAction()) return;
-        if (!MacroDynamicBindings.apply(next, mc)) return;
-        if (!dynamicTextInputsAvailable(next, mc)) return;
-        if (!isWaitConditionAction(next)) return;
-        synchronized (run.prearmedWaits) {
-            if (run.prearmedWaits.containsKey(next)) return;
-            clearCaptureOutputs(next);
-            clearOwnCaptureOutput(next);
-            PrearmedWait wait = createPrearmedWait(mc, next);
-            if (wait != null) run.prearmedWaits.put(next, wait);
-        }
-    }
-
-    private static boolean isWaitConditionAction(MacroAction action) {
-        return action instanceof WaitForPacketAction
-            || action instanceof WaitPacketMatchAction
-            || action instanceof WaitForChatAction
-            || action instanceof WaitForGuiAction
-            || action instanceof WaitGuiTypeAction
-            || action instanceof WaitForSoundAction
-            || action instanceof WaitForSlotChangeAction
-            || action instanceof WaitInventoryPredicateAction
-            || action instanceof WaitDurabilityAction
-            || action instanceof WaitFreeSlotsAction
-            || action instanceof WaitForHealthAction
-            || action instanceof WaitForBlockAction
-            || action instanceof WaitForEntityAction
-            || action instanceof WaitEntityTargetAction
-            || action instanceof WaitForCooldownAction
-            || action instanceof WaitPosAction
-            || action instanceof WaitForPositionDeltaAction
-            || action instanceof WaitForTeleportAction
-            || action instanceof WaitGamemodeChangeAction
-            || action instanceof WaitForWorldChangeAction
-            || action instanceof WaitMovementAction
-            || action instanceof WaitForLanStepAction
-            || action instanceof WaitForMacroStepAction;
-    }
-
-    private static PrearmedWait consumePrearmedWait(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null) return null;
-        synchronized (run.prearmedWaits) {
-            return run.prearmedWaits.remove(action);
-        }
-    }
-
-    private static boolean waitForPrearmed(MacroAction action, long timeoutMs) {
-        PrearmedWait wait = consumePrearmedWait(action);
-        if (wait == null) return false;
-        try {
-            waitForFutureDone(wait.future, timeoutMs);
-            commitStagedCapture(action);
-            return true;
-        } finally {
-            wait.cleanup();
-        }
-    }
-
-    private static PrearmedWait createPrearmedWait(Minecraft mc, MacroAction action) {
-        if (action instanceof WaitForPacketAction packetAction) {
-            java.util.List<String> targets = packetAction.effectiveList();
-            String firstTarget = targets.isEmpty() ? "" : targets.get(0);
-            return packetTargetFuture(packetAction, firstTarget, 1);
-        }
-        if (action instanceof WaitPacketMatchAction packetMatch) {
-            return packetMatchFuture(packetMatch);
-        }
-        if (action instanceof WaitInventoryPredicateAction inv) {
-            inv.resetBaseline();
-            return predicatePrearm(action, () -> inv.matches(mc), inv.timeoutMs);
-        }
-        if (action instanceof WaitDurabilityAction durability) {
-            if (durability.useNext) return null;
-            return predicatePrearm(action, () -> MacroDurability.durabilityObservationMatches(mc, durability), durability.timeoutMs);
-        }
-        if (action instanceof WaitFreeSlotsAction freeSlots) {
-            return predicatePrearm(action, () -> freeSlots.matches(mc), freeSlots.timeoutMs);
-        }
-        if (action instanceof WaitEntityTargetAction entityTarget) {
-            return predicatePrearm(action, () -> entityTarget.matches(mc), entityTarget.timeoutMs);
-        }
-        if (action instanceof WaitGuiTypeAction guiType) {
-            return predicatePrearm(action,
-                guiType.waitMode == WaitGuiTypeAction.WaitMode.CLOSE
-                    ? guiClosePredicate(guiType, mc)
-                    : () -> {
-                        var capture = guiType.capture(mc);
-                        capture.ifPresent(values -> stageCapture(guiType, values));
-                        return capture.isPresent();
-                    },
-                guiType.timeoutMs);
-        }
-        if (action instanceof WaitForChatAction chat) {
-            RunState run = CURRENT_RUN.get();
-            OneShotPacketListener listener = awaitReceive(packet -> {
-                ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
-                var matched = MacroChatObserve.captureChatAction(chat, capture, run == null ? null : run.variables);
-                if (matched.isEmpty()) return false;
-                if (run != null) run.stagedCaptures.put(chat, matched.get());
-                return true;
-            });
-            CompletableFuture<?> future = listener.future;
-            if (chat.timeoutMs > 0) future.completeOnTimeout(null, chat.timeoutMs, TimeUnit.MILLISECONDS);
-            return new PrearmedWait(action, future, listener::cancel, 0);
-        }
-        if (action instanceof WaitForMacroStepAction macroStep) {
-            return predicatePrearm(action, () -> isMacroStepSatisfied(macroStep), macroStep.timeoutMs);
-        }
-        if (action instanceof WaitForLanStepAction lanStep) {
-            CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(lanStep);
-            return new PrearmedWait(action, future, () -> {
-                if (!future.isDone()) future.cancel(true);
-            }, 0);
-        }
-        CompletableFuture<?> future = raceConditionFuture(mc, action);
-        if (future == null) return null;
-        int timeout = action instanceof WaitForChatAction chat ? chat.timeoutMs : 0;
-        if (timeout > 0) future.completeOnTimeout(null, timeout, TimeUnit.MILLISECONDS);
-        return new PrearmedWait(action, future, () -> {
-            if (!future.isDone()) future.cancel(true);
-        }, 0);
-    }
-
-    private static boolean hasPrearmedWait(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null) return false;
-        synchronized (run.prearmedWaits) {
-            return run.prearmedWaits.containsKey(action);
-        }
-    }
-
-    private static void recordMatchedPacket(MacroAction action, Packet<?> packet, String direction) {
-        if (action instanceof WaitForPacketAction wait) {
-            wait.matchedPacket = packet;
-            wait.matchedDirection = direction == null ? "" : direction;
-        } else if (action instanceof WaitPacketMatchAction wait) {
-            wait.matchedPacket = packet;
-            wait.matchedDirection = direction == null ? "" : direction;
-        }
-    }
-
-    private static void copyLastMatchedPacket(WaitForPacketAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (action == null || run == null || run.lastMatchedPacket == null) return;
-        action.matchedPacket = run.lastMatchedPacket;
-        action.matchedDirection = run.lastMatchedPacketDirection;
-    }
-
-    static void clearCaptureOutputs(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null) return;
-        run.stagedCaptures.remove(action);
-        if (action instanceof WaitForChatAction chat) {
-            for (String name : MacroCapturePattern.declaredNames(chat.effectiveMatchMode(), chat.pattern)) run.variables.remove(name);
-            if (chat.saveAs != null && !chat.saveAs.isBlank()) run.variables.remove(chat.saveAs);
-        } else if (action instanceof WaitForGuiAction gui) {
-            for (String name : MacroCapturePattern.declaredNames(gui.matchMode, gui.guiTitle)) run.variables.remove(name);
-            if (gui.saveAs != null && !gui.saveAs.isBlank()) run.variables.remove(gui.saveAs);
-        } else if (action instanceof WaitGuiTypeAction gui) {
-            for (String name : MacroCapturePattern.declaredNames(gui.matchMode, gui.title)) run.variables.remove(name);
-            if (gui.saveAs != null && !gui.saveAs.isBlank()) run.variables.remove(gui.saveAs);
-        } else if (action instanceof CaptureValueAction capture) {
-            for (String name : MacroCapturePattern.declaredNames(capture.matchMode, capture.pattern)) run.variables.remove(name);
-            if (capture.saveAs != null && !capture.saveAs.isBlank()) run.variables.remove(capture.saveAs);
-        }
-    }
-
-    private static void clearOwnCaptureOutput(MacroAction action) {
-        if (!(action instanceof MacroCaptureOutput output)) return;
-        String name = output.getSaveAs();
-        if (name != null && !name.isBlank()) MacroVariables.remove(name);
-        if (action instanceof WaitForSoundAction sound) sound.matchedSoundId = "";
-        if (action instanceof WaitForPacketAction packet) {
-            packet.matchedPacket = null;
-            packet.matchedDirection = "";
-        }
-        if (action instanceof WaitPacketMatchAction packet) {
-            packet.matchedPacket = null;
-            packet.matchedDirection = "";
-        }
-    }
-
-    private static void commitConditionOutput(MacroAction action, Minecraft mc) throws InterruptedException {
-        if (!(action instanceof MacroCaptureOutput output)) return;
-        String name = MacroVariableContext.cleanRootName(output.getSaveAs());
-        if (name.isEmpty()) return;
-        MacroValue value = callOnClientThread(mc, () -> conditionOutputValue(action, mc), null);
-        if (value != null) MacroVariables.setValue(name, value);
-    }
-
-    private static MacroValue conditionOutputValue(MacroAction action, Minecraft mc) {
-        if (action instanceof WaitForHealthAction healthAction && mc != null && mc.player != null) {
-            float health = mc.player.getHealth();
-            if (healthAction.below ? health >= healthAction.healthThreshold : health <= healthAction.healthThreshold) return null;
-            return MacroValue.structured(MacroValue.Kind.NUMBER, Float.toString(health), java.util.Map.of(
-                "health", MacroValue.number(health),
-                "max", MacroValue.number(mc.player.getMaxHealth()),
-                "absorption", MacroValue.number(mc.player.getAbsorptionAmount())
-            ));
-        }
-        if (action instanceof WaitForEntityAction entityAction) {
-            net.minecraft.world.entity.Entity entity = entityAction.findMatchingEntity(mc);
-            if (entity == null) return null;
-            String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
-            double distance = mc != null && mc.player != null ? mc.player.distanceTo(entity) : 0.0;
-            return MacroValue.structured(MacroValue.Kind.ENTITY, entity.getName().getString(), java.util.Map.of(
-                "name", MacroValue.text(entity.getName().getString()),
-                "id", MacroValue.identifier(id),
-                "uuid", MacroValue.text(entity.getStringUUID()),
-                "x", MacroValue.number(entity.getX()),
-                "y", MacroValue.number(entity.getY()),
-                "z", MacroValue.number(entity.getZ()),
-                "distance", MacroValue.number(distance)
-            ));
-        }
-        if (action instanceof WaitForSoundAction sound) {
-            if (sound.matchedSoundId == null || sound.matchedSoundId.isBlank()) return null;
-            return MacroValue.structured(MacroValue.Kind.IDENTIFIER, sound.matchedSoundId, java.util.Map.of(
-                "id", MacroValue.identifier(sound.matchedSoundId),
-                "x", MacroValue.number(sound.matchedX),
-                "y", MacroValue.number(sound.matchedY),
-                "z", MacroValue.number(sound.matchedZ)
-            ));
-        }
-        if (action instanceof WaitForPacketAction packet) {
-            return packetMacroValue(packet.matchedPacket, packet.matchedDirection);
-        }
-        if (action instanceof WaitPacketMatchAction packet) {
-            return packetMacroValue(packet.matchedPacket, packet.matchedDirection);
-        }
-        if (action instanceof WaitInventoryPredicateAction inventory) {
-            if (!inventory.matches(mc)) return null;
-            return inventoryMacroValue(mc, inventory.itemName, inventory.slot, inventory.condition.name());
-        }
-        if (action instanceof WaitForSlotChangeAction slotWait) {
-            if (slotWait.entries.isEmpty()) return inventoryMacroValue(mc, "", -1, "slot_change");
-            ItemTarget target = slotWait.entries.get(0).resolvedTarget().resolveTemplate(mc);
-            return target == null ? null : itemTargetMacroValue(mc, target);
-        }
-        if (action instanceof WaitPosAction || action instanceof WaitForTeleportAction
-                || action instanceof WaitForPositionDeltaAction) {
-            return playerPositionMacroValue(mc);
-        }
-        if (action instanceof WaitForWorldChangeAction && mc != null && mc.level != null) {
-            String dimension = mc.level.dimension().identifier().toString();
-            return MacroValue.structured(MacroValue.Kind.IDENTIFIER, dimension, java.util.Map.of(
-                "id", MacroValue.identifier(dimension), "name", MacroValue.text(dimension)));
-        }
-        if (action instanceof WaitGamemodeChangeAction && mc != null && mc.gameMode != null) {
-            String mode = mc.gameMode.getPlayerMode().getName();
-            WaitGamemodeChangeAction wait = (WaitGamemodeChangeAction) action;
-            if (wait.match == WaitGamemodeChangeAction.Match.TO_MODE && !wait.accepts(mc.gameMode.getPlayerMode())) return null;
-            return MacroValue.structured(MacroValue.Kind.TEXT, mode, java.util.Map.of("name", MacroValue.text(mode)));
-        }
-        return null;
-    }
-
-    private static MacroValue playerPositionMacroValue(Minecraft mc) {
-        if (mc == null || mc.player == null) return null;
-        String display = String.format(Locale.ROOT, "%.3f, %.3f, %.3f", mc.player.getX(), mc.player.getY(), mc.player.getZ());
-        return MacroValue.structured(MacroValue.Kind.POSITION, display, java.util.Map.of(
-            "x", MacroValue.number(mc.player.getX()), "y", MacroValue.number(mc.player.getY()),
-            "z", MacroValue.number(mc.player.getZ()), "yaw", MacroValue.number(mc.player.getYRot()),
-            "pitch", MacroValue.number(mc.player.getXRot())
-        ));
-    }
-
-    private static MacroValue inventoryMacroValue(Minecraft mc, String itemTemplate, int slot, String condition) {
-        if (mc == null || mc.player == null) return null;
-        MacroTemplate.Resolution item = MacroVariables.resolve(itemTemplate, mc);
-        if (!item.success()) return null;
-        ItemTarget target = ItemTarget.fromLegacyEntry(item.value());
-        if (slot >= 0) {
-            int safeSlot = Math.max(0, Math.min(mc.player.getInventory().getContainerSize() - 1, slot));
-            MacroValue stack = stackMacroValue(mc.player.getInventory().getItem(safeSlot), safeSlot);
-            return stack == null ? MacroValue.structured(MacroValue.Kind.SLOT, Integer.toString(slot), java.util.Map.of(
-                "slot", MacroValue.slot(slot), "empty", MacroValue.text("true"), "condition", MacroValue.text(condition))) : stack;
-        }
-        if (target.hasIdentity()) {
-            MacroValue matched = itemTargetMacroValue(mc, target);
-            if (matched != null) return matched.withProperty("condition", MacroValue.text(condition));
-        }
-        return MacroValue.structured(MacroValue.Kind.TEXT, condition, java.util.Map.of(
-            "condition", MacroValue.text(condition),
-            "selected_slot", MacroValue.slot(mc.player.getInventory().getSelectedSlot())
-        ));
-    }
-
-    private static MacroValue itemTargetMacroValue(Minecraft mc, ItemTarget target) {
-        if (mc == null || mc.player == null || target == null) return null;
-        if (mc.player.containerMenu != null) {
-            for (Slot slot : mc.player.containerMenu.slots) {
-                if (slot == null || slot.getItem().isEmpty()) continue;
-                int visible = AutismInventoryHelper.toUserVisibleSlot(mc, slot.index);
-                if (target.score(slot.getItem(), visible) >= 0) return stackMacroValue(slot.getItem(), visible);
-            }
-        }
-        return null;
-    }
-
-    private static MacroValue stackMacroValue(ItemStack stack, int slot) {
-        if (stack == null || stack.isEmpty()) return null;
-        Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        String itemId = id == null ? "" : id.toString();
-        String name = stack.getHoverName().getString();
-        return MacroValue.structured(MacroValue.Kind.ITEM, name, java.util.Map.of(
-            "name", MacroValue.text(name), "id", MacroValue.identifier(itemId),
-            "count", MacroValue.number(stack.getCount()), "slot", MacroValue.slot(slot)
-        ));
-    }
-
-    private static MacroValue packetMacroValue(Packet<?> packet, String direction) {
-        if (packet == null) return null;
-        java.util.LinkedHashMap<String, MacroValue> properties = new java.util.LinkedHashMap<>();
-        String packetName = AutismPacketNamer.getFriendlyName(packet, direction);
-        properties.put("name", MacroValue.text(packetName));
-        properties.put("class", MacroValue.text(packet.getClass().getName()));
-        properties.put("direction", MacroValue.text(direction));
-        RecordComponent[] components = packet.getClass().getRecordComponents();
-        if (components != null) {
-            for (RecordComponent component : components) {
-                if (properties.size() >= 64) break;
-                try {
-                    Object value = component.getAccessor().invoke(packet);
-                    properties.put(component.getName().toLowerCase(Locale.ROOT), MacroValue.text(value));
-                } catch (ReflectiveOperationException ignored) {  }
-            }
-        }
-        return MacroValue.structured(MacroValue.Kind.PACKET, packetName, properties);
-    }
-
-    private static void stageCapture(MacroAction action, java.util.Map<String, MacroValue> values) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null || values == null) return;
-        run.stagedCaptures.put(action, java.util.Map.copyOf(values));
-    }
-
-    static void commitStagedCapture(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || action == null) return;
-        java.util.Map<String, MacroValue> values = run.stagedCaptures.remove(action);
-        if (values != null) run.variables.setAll(values);
-    }
-
-    private static PrearmedWait predicatePrearm(MacroAction action, java.util.function.BooleanSupplier predicate, int timeoutMs) {
-        java.util.concurrent.atomic.AtomicBoolean active = new java.util.concurrent.atomic.AtomicBoolean(true);
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        RunState run = CURRENT_RUN.get();
-        Thread worker = new Thread(() -> withRunContext(run, () -> {
-            long start = System.currentTimeMillis();
-            while (active.get() && isCurrentRunActive() && !future.isDone()) {
-                try {
-                    if (predicate.getAsBoolean()) {
-                        future.complete(null);
-                        return;
-                    }
-                } catch (Throwable ignored) {  }
-                if (timeoutMs > 0 && System.currentTimeMillis() - start >= timeoutMs) {
-                    future.complete(null);
-                    return;
-                }
-                java.util.concurrent.locks.LockSupport.parkNanos(MACRO_WAIT_POLL_NANOS);
-                if (Thread.interrupted()) return;
-            }
-        }), "MacroPrearmedWait");
-        worker.setDaemon(true);
-        worker.start();
-        return new PrearmedWait(action, future, () -> {
-            active.set(false);
-            if (!future.isDone()) future.cancel(true);
-            worker.interrupt();
-        }, 0);
-    }
-
-    private static PrearmedWait packetTargetFuture(MacroAction action, String target, int completedPacketTargets) {
-        String normalizedTarget = WaitForPacketAction.normalizeTarget(target);
-        String direction = WaitForPacketAction.getDirection(normalizedTarget);
-        CompletableFuture<Packet<?>> matched = new CompletableFuture<>();
-        OneShotPacketListener send = null;
-        OneShotPacketListener recv = null;
-        if (!"S2C".equalsIgnoreCase(direction)) {
-            send = awaitSend(packet -> MacroPacketWait.matchesPacketTarget(normalizedTarget, packet, "C2S"));
-            send.future.thenAccept(packet -> {
-                recordMatchedPacket(action, packet, "C2S");
-                matched.complete(packet);
-            });
-        }
-        if (!"C2S".equalsIgnoreCase(direction)) {
-            recv = awaitReceive(packet -> MacroPacketWait.matchesPacketTarget(normalizedTarget, packet, "S2C"));
-            recv.future.thenAccept(packet -> {
-                recordMatchedPacket(action, packet, "S2C");
-                matched.complete(packet);
-            });
-        }
-        OneShotPacketListener finalSend = send;
-        OneShotPacketListener finalRecv = recv;
-        return new PrearmedWait(action, matched, () -> {
-            if (finalSend != null) finalSend.cancel();
-            if (finalRecv != null) finalRecv.cancel();
-            if (!matched.isDone()) matched.cancel(true);
-        }, completedPacketTargets);
-    }
-
-    private static PrearmedWait packetMatchFuture(WaitPacketMatchAction action) {
-        OneShotPacketListener send = null;
-        OneShotPacketListener recv = null;
-        CompletableFuture<Packet<?>> matched = new CompletableFuture<>();
-        if (action.direction != WaitPacketMatchAction.Direction.S2C) {
-            send = awaitSend(packet -> action.matches(packet, "C2S"));
-            send.future.thenAccept(packet -> {
-                recordMatchedPacket(action, packet, "C2S");
-                matched.complete(packet);
-            });
-        }
-        if (action.direction != WaitPacketMatchAction.Direction.C2S) {
-            recv = awaitReceive(packet -> action.matches(packet, "S2C"));
-            recv.future.thenAccept(packet -> {
-                recordMatchedPacket(action, packet, "S2C");
-                matched.complete(packet);
-            });
-        }
-        if (send == null && recv == null) return null;
-        if (action.timeoutMs > 0) matched.completeOnTimeout(null, action.timeoutMs, TimeUnit.MILLISECONDS);
-        OneShotPacketListener finalSend = send;
-        OneShotPacketListener finalRecv = recv;
-        return new PrearmedWait(action, matched, () -> {
-            if (finalSend != null) finalSend.cancel();
-            if (finalRecv != null) finalRecv.cancel();
-            if (!matched.isDone()) matched.cancel(true);
-        }, 0);
-    }
-
-    private static void waitForPacketMatch(WaitPacketMatchAction action) {
-        if (action == null) return;
-        OneShotPacketListener send = null;
-        OneShotPacketListener recv = null;
-        try {
-            if (action.direction != WaitPacketMatchAction.Direction.S2C) {
-                send = awaitSend(packet -> {
-                    boolean matches = action.matches(packet, "C2S");
-                    if (matches) recordMatchedPacket(action, packet, "C2S");
-                    return matches;
-                });
-            }
-            if (action.direction != WaitPacketMatchAction.Direction.C2S) {
-                recv = awaitReceive(packet -> {
-                    boolean matches = action.matches(packet, "S2C");
-                    if (matches) recordMatchedPacket(action, packet, "S2C");
-                    return matches;
-                });
-            }
-            CompletableFuture<?> future;
-            if (send != null && recv != null) future = CompletableFuture.anyOf(send.future, recv.future);
-            else if (send != null) future = send.future;
-            else if (recv != null) future = recv.future;
-            else return;
-            if (action.timeoutMs > 0) future.completeOnTimeout(null, action.timeoutMs, TimeUnit.MILLISECONDS);
-            waitForFutureDone(future, action.timeoutMs);
-        } finally {
-            if (send != null) send.cancel();
-            if (recv != null) recv.cancel();
-        }
-    }
 
     private static void runPacketGateAction(Minecraft mc, PacketGateAction action) {
         if (action == null) return;
@@ -2631,7 +2135,7 @@ public class MacroExecutor {
                 wait.operator = MacroStringList.enumValue(WaitPacketMatchAction.Operator.class, action.untilPacketOperator, WaitPacketMatchAction.Operator.EXISTS);
                 wait.value = action.untilPacketValue;
                 wait.timeoutMs = Math.max(0, action.durationValue);
-                waitForPacketMatch(wait);
+                MacroPrearm.waitForPacketMatch(wait);
                 disablePacketGate(mc, action);
             }
             case UNTIL_GUI -> {
@@ -2688,7 +2192,7 @@ public class MacroExecutor {
         }
     }
 
-    private static boolean isMacroStepSatisfied(WaitForMacroStepAction action) {
+    static boolean isMacroStepSatisfied(WaitForMacroStepAction action) {
         String target = action.macroName == null ? "" : action.macroName.trim();
         if (target.isEmpty()) return true;
         synchronized (RUN_LOCK) {
@@ -2758,15 +2262,15 @@ public class MacroExecutor {
         java.util.List<CompletableFuture<MacroEvent>> baseFutures = new ArrayList<>();
         java.util.List<CompletableFuture<MacroEvent>> futures = new ArrayList<>();
         for (MacroAction condition : conditions) {
-            clearOwnCaptureOutput(condition);
+            MacroPrearm.clearOwnCaptureOutput(condition);
             CompletableFuture<MacroEvent> base = timedConditionFuture(mc, condition);
             baseFutures.add(base);
             futures.add(base.thenApply(event -> {
-                if (event.packet() != null) recordMatchedPacket(condition, event.packet(), event.direction());
+                if (event.packet() != null) MacroPrearm.recordMatchedPacket(condition, event.packet(), event.direction());
                 if (!(condition instanceof MacroCaptureOutput output)) return event;
                 String name = MacroVariableContext.cleanRootName(output.getSaveAs());
                 if (name.isEmpty()) return event;
-                MacroValue value = conditionOutputValue(condition, mc);
+                MacroValue value = MacroPrearm.conditionOutputValue(condition, mc);
                 if (value == null) return event;
                 java.util.LinkedHashMap<String, MacroValue> captures = new java.util.LinkedHashMap<>(event.captures());
                 captures.put(name, value);
@@ -3305,7 +2809,7 @@ public class MacroExecutor {
         return timed;
     }
 
-    private static CompletableFuture<?> raceConditionFuture(Minecraft mc, MacroAction trigger) {
+    static CompletableFuture<?> raceConditionFuture(Minecraft mc, MacroAction trigger) {
         if (trigger instanceof WaitMovementAction wm) {
             return raceConditionFuture(mc, wm.resolveSubAction());
         }
@@ -3408,7 +2912,7 @@ public class MacroExecutor {
             return MacroConditionRegistry.waitForPos(pos.x, pos.y, pos.z, pos.leeway, pos.checkRotation, pos.yaw, pos.pitch, pos.rotLeeway);
         }
         if (trigger instanceof WaitForEntityAction entity) {
-            return predicateFuture(() -> entity.matchesEntityTarget(Minecraft.getInstance()), entity.timeoutMs);
+            return MacroPrearm.predicateFuture(() -> entity.matchesEntityTarget(Minecraft.getInstance()), entity.timeoutMs);
         }
         if (trigger instanceof WaitForSoundAction sound) {
             return MacroConditionRegistry.waitForSound(sound);
@@ -3417,10 +2921,10 @@ public class MacroExecutor {
             return MacroConditionRegistry.waitForSlotChange(slot);
         }
         if (trigger instanceof WaitDurabilityAction durability) {
-            return predicateFuture(() -> MacroDurability.durabilityObservationMatches(Minecraft.getInstance(), durability), durability.timeoutMs);
+            return MacroPrearm.predicateFuture(() -> MacroDurability.durabilityObservationMatches(Minecraft.getInstance(), durability), durability.timeoutMs);
         }
         if (trigger instanceof WaitFreeSlotsAction freeSlots) {
-            return predicateFuture(() -> freeSlots.matches(Minecraft.getInstance()), freeSlots.timeoutMs);
+            return MacroPrearm.predicateFuture(() -> freeSlots.matches(Minecraft.getInstance()), freeSlots.timeoutMs);
         }
         if (trigger instanceof TickSyncAction) {
             return MacroConditionRegistry.waitForNextTick();
@@ -3515,7 +3019,7 @@ public class MacroExecutor {
     private static void executeSingleActionWithWaits(Minecraft mc, MacroAction action, AutismModule module) throws InterruptedException {
         if (!MacroDynamicBindings.apply(action, mc)) return;
         if (!dynamicTextInputsAvailable(action, mc)) return;
-        clearOwnCaptureOutput(action);
+        MacroPrearm.clearOwnCaptureOutput(action);
         EnumSet<SharedClientResource> heldResources = acquireClientResources(action);
         try {
 
@@ -3554,10 +3058,10 @@ public class MacroExecutor {
                     MacroPacketWait.awaitPacket(target);
                 }
             }
-            copyLastMatchedPacket(packetAction);
+            MacroPrearm.copyLastMatchedPacket(packetAction);
         } else if (action instanceof WaitPacketMatchAction wpma) {
             setCurrentStatus(wpma.getDisplayName());
-            waitForPacketMatch(wpma);
+            MacroPrearm.waitForPacketMatch(wpma);
         } else if (action instanceof WaitInventoryPredicateAction wipa) {
             setCurrentStatus(wipa.getDisplayName());
             waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
@@ -3573,14 +3077,14 @@ public class MacroExecutor {
             waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
         } else if (action instanceof WaitGuiTypeAction wgta) {
             setCurrentStatus(wgta.getDisplayName());
-            clearCaptureOutputs(wgta);
+            MacroPrearm.clearCaptureOutputs(wgta);
             if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) waitForPredicate(guiClosePredicate(wgta, mc), wgta.timeoutMs);
             else waitForPredicate(() -> {
                 var captured = wgta.capture(mc);
-                captured.ifPresent(values -> stageCapture(wgta, values));
+                captured.ifPresent(values -> MacroPrearm.stageCapture(wgta, values));
                 return captured.isPresent();
             }, wgta.timeoutMs);
-            commitStagedCapture(wgta);
+            MacroPrearm.commitStagedCapture(wgta);
         } else if (action instanceof PacketGateAction pga) {
             runPacketGateAction(mc, pga);
         } else if (isTargetWaitInteractionAction(action)) {
@@ -3601,7 +3105,7 @@ public class MacroExecutor {
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForGuiAction) {
             WaitForGuiAction wga = (WaitForGuiAction) action;
-            clearCaptureOutputs(wga);
+            MacroPrearm.clearCaptureOutputs(wga);
             if (wga.waitMode == WaitForGuiAction.WaitMode.CLOSE) {
                 setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
                 waitForPredicate(guiClosePredicate(wga, mc), wga.timeoutMs);
@@ -3609,11 +3113,11 @@ public class MacroExecutor {
                 setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
                 waitForPredicate(() -> {
                     var captured = wga.captureGui(mc.gui.screen());
-                    captured.ifPresent(values -> stageCapture(wga, values));
+                    captured.ifPresent(values -> MacroPrearm.stageCapture(wga, values));
                     return captured.isPresent();
                 }, wga.timeoutMs);
             }
-            commitStagedCapture(wga);
+            MacroPrearm.commitStagedCapture(wga);
         } else if (action instanceof WaitForCooldownAction) {
             WaitForCooldownAction wca = (WaitForCooldownAction) action;
             ItemTarget cooldownTarget = resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
@@ -4026,7 +3530,7 @@ public class MacroExecutor {
             }
         }
 
-        commitConditionOutput(action, mc);
+        MacroPrearm.commitConditionOutput(action, mc);
 
         if (postGuiFuture != null && isCurrentRunActive()) {
             try {
@@ -4059,7 +3563,7 @@ public class MacroExecutor {
         waitOneTick();
     }
 
-    private static boolean dynamicTextInputsAvailable(MacroAction action, Minecraft mc) {
+    static boolean dynamicTextInputsAvailable(MacroAction action, Minecraft mc) {
         if (action instanceof WaitForChatAction chat && chat.effectiveMatchMode() == MacroCapturePattern.Mode.MATCH) {
             return MacroVariables.resolve(chat.pattern, mc).success();
         }

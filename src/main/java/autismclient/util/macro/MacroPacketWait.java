@@ -120,7 +120,7 @@ final class MacroPacketWait {
     public static void awaitChat(WaitForChatAction wca) {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
         if (run != null) {
-            MacroExecutor.clearCaptureOutputs(wca);
+            MacroPrearm.clearCaptureOutputs(wca);
             CompletableFuture<Void> future = new CompletableFuture<>();
             run.chatFuture = future;
             run.waitingChatAction = wca;
@@ -128,7 +128,7 @@ final class MacroPacketWait {
             try {
                 if (wca.timeoutMs > 0) future.completeOnTimeout(null, wca.timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
                 MacroExecutor.waitForCondition(future);
-                MacroExecutor.commitStagedCapture(wca);
+                MacroPrearm.commitStagedCapture(wca);
             } finally {
                 if (run.chatFuture == future) {
                     run.waitingForChat.set(false);
@@ -162,7 +162,7 @@ final class MacroPacketWait {
     public static void awaitCaptureValueChat(CaptureValueAction action) {
         if (action == null) return;
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        MacroExecutor.clearCaptureOutputs(action);
+        MacroPrearm.clearCaptureOutputs(action);
         MacroExecutor.OneShotPacketListener listener = MacroExecutor.awaitReceive(packet -> {
             MacroExecutor.ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
             if (capture == null) return false;
@@ -181,7 +181,7 @@ final class MacroPacketWait {
             return true;
         });
         try {
-            if (MacroExecutor.waitForFutureDone(listener.future, 0) && run != null) MacroExecutor.commitStagedCapture(action);
+            if (MacroExecutor.waitForFutureDone(listener.future, 0) && run != null) MacroPrearm.commitStagedCapture(action);
         } finally {
             listener.cancel();
         }

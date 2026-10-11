@@ -162,7 +162,7 @@ final class MacroCaptureAutofill {
 
     private static void runCaptureCommandAutofill(Minecraft mc, CaptureValueAction action) {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        MacroExecutor.clearCaptureOutputs(action);
+        MacroPrearm.clearCaptureOutputs(action);
         MacroTemplate.Resolution resolved = MacroVariables.resolve(action.autofillCommand, mc);
         if (!resolved.success() || resolved.value().isBlank()) return;
         String query = buildAutofillQuery(resolved.value(), action.listFilter, action.listFilterText);
@@ -224,7 +224,7 @@ final class MacroCaptureAutofill {
 
     private static void runCaptureNamescrape(Minecraft mc, CaptureValueAction action) {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        MacroExecutor.clearCaptureOutputs(action);
+        MacroPrearm.clearCaptureOutputs(action);
         var connection = mc.getConnection();
         if (connection == null) return;
         String cacheKey = " namescrape";
@@ -335,7 +335,7 @@ final class MacroCaptureAutofill {
 
     private static void awaitCaptureValueState(Minecraft mc, CaptureValueAction action) {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        MacroExecutor.clearCaptureOutputs(action);
+        MacroPrearm.clearCaptureOutputs(action);
         String lastMessage = "";
         while (MacroExecutor.isCurrentRunActive()) {
             CaptureValueAction.Preview preview;
@@ -361,7 +361,7 @@ final class MacroCaptureAutofill {
 
     private static void awaitCaptureValueScoreboard(Minecraft mc, CaptureValueAction action) {
         MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
-        MacroExecutor.clearCaptureOutputs(action);
+        MacroPrearm.clearCaptureOutputs(action);
         String trackedKey = action.scoreboardRow;
         int trackedRow = action.scoreboardRowIndex;
         String trackedObjective = action.scoreboardObjective;
