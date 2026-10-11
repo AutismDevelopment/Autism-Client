@@ -813,7 +813,7 @@ final class MacroRace {
             return MacroConditionRegistry.waitForBlock(block);
         }
         if (trigger instanceof WaitForCooldownAction cooldown) {
-            ItemTarget target = MacroExecutor.resolveItemTarget(cooldown.itemTarget, cooldown.itemName);
+            ItemTarget target = MacroWorldActions.resolveItemTarget(cooldown.itemTarget, cooldown.itemName);
             return MacroConditionRegistry.waitForCooldown(target, cooldown.checkMainInteractionHand);
         }
         if (trigger instanceof WaitPosAction pos) {

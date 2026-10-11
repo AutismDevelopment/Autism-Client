@@ -133,7 +133,7 @@ public class MacroExecutor {
     static volatile CompletableFuture<Void> activeChatFuture = null;
 
     private static volatile CompletableFuture<Void> activeBaritoneGoalFuture = null;
-    private static final AtomicReference<RunState> BARITONE_OWNER = new AtomicReference<>();
+    static final AtomicReference<RunState> BARITONE_OWNER = new AtomicReference<>();
 
     private static final AtomicBoolean isRotating = new AtomicBoolean(false);
     private static final AtomicReference<RunState> ROTATION_OWNER = new AtomicReference<>();
@@ -169,7 +169,7 @@ public class MacroExecutor {
         volatile WaitForChatAction waitingChatAction = null;
         volatile CompletableFuture<Void> chatFuture = null;
         volatile CompletableFuture<Void> baritoneGoalFuture = null;
-        volatile MineProgressTracker activeMineTracker = null;
+        volatile MacroWorldActions.MineProgressTracker activeMineTracker = null;
         volatile Thread macroThread = null;
         volatile String status = "";
         volatile int currentStepIndex = -1;
@@ -660,7 +660,7 @@ public class MacroExecutor {
         FpsLimitController.clear(run.id);
         PingSpoofController.clearMacro(run.id);
         cancelRotation(run);
-        requestOwnedBaritoneStop(run, mc);
+        MacroWorldActions.requestOwnedBaritoneStop(run, mc);
         Thread thread = run.macroThread;
         if (interruptThread && thread != null && thread != Thread.currentThread()) {
             thread.interrupt();
@@ -1255,9 +1255,9 @@ public class MacroExecutor {
                     }
                     else if (action instanceof WaitForCooldownAction) {
                         WaitForCooldownAction wca = (WaitForCooldownAction) action;
-                        ItemTarget cooldownTarget = resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
+                        ItemTarget cooldownTarget = MacroWorldActions.resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
                         if (cooldownTarget == null) continue;
-                        String cooldownLabel = describeItemTarget(cooldownTarget);
+                        String cooldownLabel = MacroWorldActions.describeItemTarget(cooldownTarget);
                         setCurrentStatus("Waiting for cooldown: " +
                             (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
                         try {
@@ -1400,7 +1400,7 @@ public class MacroExecutor {
                     }
                     else if (action instanceof GoToAction) {
                         GoToAction ga = (GoToAction) action;
-                        runGoToAction(mc, ga);
+                        MacroWorldActions.runGoToAction(mc, ga);
                     }
 
                     else if (action instanceof MoveAction) {
@@ -1494,7 +1494,7 @@ public class MacroExecutor {
                     }
                     else if (action instanceof MineAction) {
                         MineAction mna = (MineAction) action;
-                        runMineAction(mc, mna);
+                        MacroWorldActions.runMineAction(mc, mna);
                     }
                     else if (action instanceof InstaBreakAction) {
                         MacroBreak.runInstaBreakAction(mc, (InstaBreakAction) action);
@@ -1725,7 +1725,7 @@ public class MacroExecutor {
                         ItemAction ia = (ItemAction) action;
                         if (ia.waitForItem) {
                             try {
-                                waitForItemActionTargets(mc, ia);
+                                MacroWorldActions.waitForItemActionTargets(mc, ia);
                             } catch (java.util.concurrent.CancellationException e) {  }
                         }
                         postGuiFuture = MacroActionRunner.createPostGuiFuture(mc, ia);
@@ -1742,7 +1742,7 @@ public class MacroExecutor {
                         MacroActionRunner.runMacroActionOnClientThread(mc, action, action.getDisplayName());
                     }
                     else if (action instanceof CraftAction craftAction) {
-                        runCraftAction(mc, craftAction);
+                        MacroWorldActions.runCraftAction(mc, craftAction);
                     }
                     else if (action instanceof SendPacketAction) {
 
@@ -1788,7 +1788,7 @@ public class MacroExecutor {
                         MacroActionRunner.runClickActionBurst(mc, ca);
                     }
                     else if (action instanceof PayAction) {
-                        runPayAction(mc, (PayAction) action);
+                        MacroWorldActions.runPayAction(mc, (PayAction) action);
                     }
                     else if (action instanceof XCarryAction xsa) {
                         if (xsa.mode == XCarryAction.Mode.PUT_IN
@@ -1865,7 +1865,7 @@ public class MacroExecutor {
                     }
                     else if (action instanceof PlaceAction placeInteract && placeInteract.interact) {
 
-                        runPlaceAction(mc, placeInteract);
+                        MacroWorldActions.runPlaceAction(mc, placeInteract);
                     }
                     else if (action instanceof PlaceAction place && place.waitForItem) {
 
@@ -1874,9 +1874,9 @@ public class MacroExecutor {
                             postGuiFuture = null;
                         } else {
                         if (placeTarget.hasIdentity() || placeTarget.hasSlot()) {
-                            setCurrentStatus("Waiting for " + describeItemTarget(placeTarget));
+                            setCurrentStatus("Waiting for " + MacroWorldActions.describeItemTarget(placeTarget));
                             try {
-                                waitForItemActionEntry(mc, placeTarget);
+                                MacroWorldActions.waitForItemActionEntry(mc, placeTarget);
                             } catch (java.util.concurrent.CancellationException e) {  }
                         }
                         if (isCurrentRunActive()) {
@@ -2224,9 +2224,9 @@ public class MacroExecutor {
             MacroPrearm.commitStagedCapture(wga);
         } else if (action instanceof WaitForCooldownAction) {
             WaitForCooldownAction wca = (WaitForCooldownAction) action;
-            ItemTarget cooldownTarget = resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
+            ItemTarget cooldownTarget = MacroWorldActions.resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
             if (cooldownTarget == null) return;
-            String cooldownLabel = describeItemTarget(cooldownTarget);
+            String cooldownLabel = MacroWorldActions.describeItemTarget(cooldownTarget);
             setCurrentStatus("Waiting for cooldown: " +
                 (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
             try {
@@ -2311,7 +2311,7 @@ public class MacroExecutor {
             MacroRace.waitForMacroStep(wma);
         } else if (action instanceof GoToAction) {
             GoToAction ga = (GoToAction) action;
-            runGoToAction(mc, ga);
+            MacroWorldActions.runGoToAction(mc, ga);
         } else if (action instanceof MoveAction) {
             MoveAction ma = (MoveAction) action;
             if (ma.nonBlocking) {
@@ -2356,13 +2356,13 @@ public class MacroExecutor {
             }
         } else if (action instanceof MineAction) {
             MineAction mna = (MineAction) action;
-            runMineAction(mc, mna);
+            MacroWorldActions.runMineAction(mc, mna);
         } else if (action instanceof InstaBreakAction) {
             MacroBreak.runInstaBreakAction(mc, (InstaBreakAction) action);
         } else if (action instanceof BreakAction) {
             MacroBreak.runBreakAction(mc, (BreakAction) action);
         } else if (action instanceof PlaceAction) {
-            runPlaceAction(mc, (PlaceAction) action);
+            MacroWorldActions.runPlaceAction(mc, (PlaceAction) action);
         } else if (action instanceof UseItemAction) {
             MacroActionRunner.runUseItemAction(mc, (UseItemAction) action);
         } else if (action instanceof JumpAction) {
@@ -2425,7 +2425,7 @@ public class MacroExecutor {
             ItemAction ia = (ItemAction) action;
             if (ia.waitForItem) {
                 try {
-                    waitForItemActionTargets(mc, ia);
+                    MacroWorldActions.waitForItemActionTargets(mc, ia);
                 } catch (java.util.concurrent.CancellationException e) {  }
             }
             postGuiFuture = MacroActionRunner.createPostGuiFuture(mc, ia);
@@ -2455,7 +2455,7 @@ public class MacroExecutor {
             ClickAction ca = (ClickAction) action;
             MacroActionRunner.runClickActionBurst(mc, ca);
         } else if (action instanceof PayAction) {
-            runPayAction(mc, (PayAction) action);
+            MacroWorldActions.runPayAction(mc, (PayAction) action);
         } else if (action instanceof XCarryAction xsa) {
             if (xsa.mode == XCarryAction.Mode.PUT_IN
                     && (xsa.transferMode == XCarryAction.TransferMode.CLICK
@@ -2482,7 +2482,7 @@ public class MacroExecutor {
                 });
             }
         } else if (action instanceof CraftAction) {
-            runCraftAction(mc, (CraftAction) action);
+            MacroWorldActions.runCraftAction(mc, (CraftAction) action);
         } else if (action instanceof autismclient.util.macro.StoreItemAction) {
             autismclient.util.macro.StoreItemAction sia = (autismclient.util.macro.StoreItemAction) action;
             setCurrentStatus((sia.mode == autismclient.util.macro.StoreItemAction.Mode.LOOT ? "Looting" : "Storing")
@@ -2666,600 +2666,6 @@ public class MacroExecutor {
     }
 
 
-    private static void runPlaceAction(Minecraft mc, PlaceAction action) throws InterruptedException {
-        if (mc == null || mc.player == null || mc.level == null) return;
-
-        ItemTarget target = action.resolvedItemTarget().resolveTemplate(mc);
-        if (target == null) return;
-        if (action.waitForItem && target != null && (target.hasIdentity() || target.hasSlot())) {
-            setCurrentStatus("Waiting for " + describeItemTarget(target));
-            waitForItemActionEntry(mc, target);
-        }
-
-        if (!action.interact) {
-
-            MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
-            return;
-        }
-
-        final BlockPos placePos = action.blockPos == null ? BlockPos.ZERO : action.blockPos;
-        final Direction face = action.manualDirection && action.direction != null ? action.direction : Direction.UP;
-        InteractTiming t = action.interactTiming;
-        boolean interactFirst = t == InteractTiming.BEFORE || (t == InteractTiming.CUSTOM && action.interactCustomMs < 0);
-        long ns = t == InteractTiming.CUSTOM ? Math.abs((long) action.interactCustomMs) * 1_000_000L : 0L;
-
-        if (interactFirst) {
-
-            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
-            if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
-        } else if (t == InteractTiming.WITH) {
-
-            MacroClientThread.runOnClientThread(mc, () -> {
-                try { action.execute(mc); } catch (Exception e) { AutismClientAddon.LOG.debug("[Autism] Macro WITH-interact action failed", e); }
-                MacroBreak.sendBlockInteract(mc, placePos, face);
-            }, action.isTickAligned());
-        } else if (t == InteractTiming.AFTER_PLUS) {
-            MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
-            waitOneTick();
-            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
-        } else {
-
-            MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
-            if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
-        }
-    }
-
-    private static void waitForItemInSpecificHandlerSlot(Minecraft mc, int slotId, ItemTarget target) throws InterruptedException {
-        while (isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotMatchesItem(mc, slotId, target), Boolean.FALSE))) return;
-            waitOneTick();
-        }
-    }
-
-    private static void waitForAnyItemInSpecificHandlerSlot(Minecraft mc, int slotId) throws InterruptedException {
-        while (isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotHasAnyItem(mc, slotId), Boolean.FALSE))) return;
-            waitOneTick();
-        }
-    }
-
-    private static boolean handlerSlotMatchesItem(Minecraft mc, int slotId, ItemTarget target) {
-        if (mc.player == null || mc.player.containerMenu == null) return false;
-        int handlerSlot = autismclient.util.AutismInventoryHelper.resolveConfiguredHandlerSlot(mc, slotId);
-        if (handlerSlot < 0 || handlerSlot >= mc.player.containerMenu.slots.size()) return false;
-        var slot = mc.player.containerMenu.slots.get(handlerSlot);
-        if (slot == null || slot.getItem().isEmpty()) return false;
-        ItemTarget resolvedTarget = target == null ? ItemTarget.slotOnly(slotId) : target.copy();
-        if (!resolvedTarget.hasSlot()) resolvedTarget.slot = slotId;
-        return resolvedTarget.matches(slot.getItem(), slotId);
-    }
-
-    private static boolean handlerSlotHasAnyItem(Minecraft mc, int slotId) {
-        if (mc.player == null || mc.player.containerMenu == null) return false;
-        int handlerSlot = autismclient.util.AutismInventoryHelper.resolveConfiguredHandlerSlot(mc, slotId);
-        if (handlerSlot < 0 || handlerSlot >= mc.player.containerMenu.slots.size()) return false;
-        var slot = mc.player.containerMenu.slots.get(handlerSlot);
-        return slot != null && !slot.getItem().isEmpty();
-    }
-
-    private static void waitForItemActionTargets(Minecraft mc, ItemAction ia) throws InterruptedException {
-        if (ia == null) return;
-
-        List<ItemTarget> targets = resolveItemTargets(mc, ia.itemTargets, ia.itemNames);
-        if (!targets.isEmpty()) {
-            for (ItemTarget target : targets) {
-                waitForItemActionEntry(mc, target);
-            }
-            return;
-        }
-
-        if (ia.useSlot && ia.targetSlot >= 0) {
-            setCurrentStatus("Waiting for slot " + ia.targetSlot);
-            waitForAnyItemInSpecificHandlerSlot(mc, ia.targetSlot);
-        }
-    }
-
-    private static void waitForItemActionEntry(Minecraft mc, ItemTarget target) throws InterruptedException {
-        ItemTarget resolvedTarget = target == null ? null : target.resolveTemplate(mc);
-        if (resolvedTarget == null) return;
-        String itemLabel = describeItemTarget(resolvedTarget);
-        int slot = resolvedTarget.hasSlot() ? resolvedTarget.slot : -1;
-
-        if (slot >= 0 && resolvedTarget.hasIdentity()) {
-            setCurrentStatus("Waiting for " + itemLabel);
-            waitForItemInSpecificHandlerSlot(mc, slot, resolvedTarget);
-            return;
-        }
-
-        if (slot >= 0) {
-            setCurrentStatus("Waiting for slot " + slot);
-            waitForAnyItemInSpecificHandlerSlot(mc, slot);
-            return;
-        }
-
-        if (resolvedTarget.hasIdentity()) {
-            setCurrentStatus("Waiting for item in GUI: " + itemLabel);
-            CompletableFuture<Void> waitFuture = MacroConditionRegistry.waitForItemInHandler(resolvedTarget);
-            waitForCondition(waitFuture);
-        }
-    }
-
-    static ItemTarget resolveItemTarget(ItemTarget target, String legacyEntry) {
-        if (target != null && (target.hasSlot() || target.hasIdentity())) return target.copy();
-        return ItemTarget.fromLegacyEntry(legacyEntry);
-    }
-
-    private static List<ItemTarget> resolveItemTargets(Minecraft mc, List<ItemTarget> targets, List<String> legacyEntries) {
-        List<ItemTarget> resolved = new ArrayList<>();
-        if (targets != null) {
-            for (ItemTarget target : targets) {
-                if (target == null || (!target.hasSlot() && !target.hasIdentity())) continue;
-                ItemTarget runtimeTarget = target.resolveTemplate(mc);
-                if (runtimeTarget != null) resolved.add(runtimeTarget);
-            }
-        }
-        if (!resolved.isEmpty()) return resolved;
-        if (legacyEntries == null) return resolved;
-        for (String entry : legacyEntries) {
-            ItemTarget parsed = ItemTarget.fromLegacyEntry(entry);
-            ItemTarget runtimeTarget = parsed.resolveTemplate(mc);
-            if (runtimeTarget != null && (runtimeTarget.hasSlot() || runtimeTarget.hasIdentity())) resolved.add(runtimeTarget);
-        }
-        return resolved;
-    }
-
-    private static String describeItemTarget(ItemTarget target) {
-        if (target == null) return "";
-        String summary = target.summaryText();
-        if (summary != null && !summary.isBlank()) return summary;
-        String legacy = target.toLegacyEntry();
-        return legacy == null ? "" : legacy;
-    }
-
-    private static void runCraftAction(Minecraft mc, CraftAction craftAction) throws InterruptedException {
-        if (craftAction == null || !craftAction.hasEntries()) {
-            setCurrentStatus("Crafting");
-            AutismClientMessaging.sendPrefixed("\u00a7cNo craft recipes selected.");
-            return;
-        }
-
-        for (int index = 0; index < craftAction.entries.size(); index++) {
-            CraftAction.CraftEntry entry = craftAction.entries.get(index);
-            if (entry == null || !entry.hasRecipe()) continue;
-
-            setCurrentStatus(entry.useMaxAmount
-                ? "Crafting " + entry.resultName + " [Max] (" + (index + 1) + "/" + craftAction.entries.size() + ")"
-                : "Crafting " + entry.resultName + " x" + Math.max(1, entry.amount) + " (" + (index + 1) + "/" + craftAction.entries.size() + ")");
-
-            AutismCraftingHelper.CraftableRecipeOption option = AutismCraftingHelper.findCraftableRecipe(mc, entry.recipeKey);
-            if (option == null) option = AutismCraftingHelper.findCraftableRecipe(mc, entry.recipeId);
-            if (option == null) {
-                setCurrentStatus("Recipe not found");
-                AutismClientMessaging.sendPrefixed("\u00a7cRecipe not found: " + (entry.resultName == null || entry.resultName.isBlank() ? "unknown" : entry.resultName));
-                return;
-            }
-
-            int desiredAmount = AutismCraftingHelper.getEffectiveRequestedOutput(option, entry.amount, entry.useMaxAmount);
-            if (desiredAmount <= 0) {
-                setCurrentStatus("No space or materials");
-                AutismClientMessaging.sendPrefixed("\u00a7cNo space or materials for " + entry.resultName + ".");
-                return;
-            }
-
-            AutismCraftingHelper.CraftExecutionResult result = AutismCraftingHelper.executeCraftImmediately(
-                mc,
-                entry.recipeKey,
-                entry.recipeId,
-                desiredAmount
-            );
-
-            setCurrentStatus(result.message);
-            if (!result.success) {
-                AutismClientMessaging.sendPrefixed("\u00a7c" + result.message);
-                return;
-            }
-            if (isCurrentRunActive()) {
-                CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                waitForCondition(tickFuture);
-            }
-        }
-    }
-
-    private static void runGoToAction(Minecraft mc, GoToAction goToAction) throws InterruptedException {
-        setCurrentStatus(String.format("Going to %.0f,%.0f,%.0f", goToAction.x, goToAction.y, goToAction.z));
-
-        if (!AutismCompatManager.isBaritoneAvailable()) {
-            AutismClientMessaging.sendPrefixed("Baritone not installed; skipping goto action.");
-            return;
-        }
-
-        int goalX = (int) Math.floor(goToAction.x);
-        int goalY = (int) Math.floor(goToAction.y);
-        int goalZ = (int) Math.floor(goToAction.z);
-        RunState run = CURRENT_RUN.get();
-
-        if (!runBaritoneStart(mc, () -> AutismCompatManager.startBaritoneGoTo(mc, goalX, goalY, goalZ))) {
-            AutismClientMessaging.sendPrefixed("Failed to start Baritone goto.");
-            return;
-        }
-
-        try {
-            if (!goToAction.waitForArrival) {
-                setCurrentStatus("Goto started");
-                return;
-            }
-
-            long startMs = System.currentTimeMillis();
-            boolean sawBaritoneActivity = false;
-
-            while (isCurrentRunActive()) {
-                boolean goalActive = AutismCompatManager.isBaritoneGoalActive();
-                boolean baritoneBusy = AutismCompatManager.isBaritoneBusy();
-                if (goalActive || baritoneBusy) sawBaritoneActivity = true;
-
-                if (sawBaritoneActivity && !goalActive && !baritoneBusy) {
-                    setCurrentStatus("Goto finished");
-                    return;
-                }
-
-                if (!sawBaritoneActivity && System.currentTimeMillis() - startMs >= 1500 && !goalActive && !baritoneBusy) {
-                    setCurrentStatus("Goto finished");
-                    return;
-                }
-
-                CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                waitForCondition(tickFuture);
-            }
-        } finally {
-            if (!isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
-            else releaseBaritoneOwner(run);
-        }
-    }
-
-    private static void runMineAction(Minecraft mc, MineAction mineAction) throws InterruptedException {
-        String mineDesc = mineAction.targetBlocks.isEmpty() ? "none" : mineAction.targetBlocks.get(0);
-        setCurrentStatus("Mining: " + mineDesc);
-
-        if (mineAction.targetBlocks.isEmpty()) return;
-        if (!AutismCompatManager.isBaritoneAvailable()) {
-            AutismClientMessaging.sendPrefixed("Baritone not installed; skipping mine action.");
-            return;
-        }
-
-        java.util.List<String> blockNames = new java.util.ArrayList<>();
-        for (String id : mineAction.targetBlocks) {
-            if (id == null || id.isBlank()) continue;
-            blockNames.add(id.startsWith("minecraft:") ? id.substring(10) : id);
-        }
-        if (blockNames.isEmpty()) return;
-
-        RunState run = CURRENT_RUN.get();
-        MineProgressTracker mineTracker = mineAction.stopMinedCount ? MineProgressTracker.create(mc, mineAction.targetBlocks) : null;
-        if (mineTracker != null) {
-            mineTracker.poll(mc);
-            if (run != null) run.activeMineTracker = mineTracker;
-        }
-
-        try {
-            if (!runBaritoneStart(mc, () -> AutismCompatManager.startBaritoneMine(mc, blockNames), mineAction.isTickAligned())) {
-                AutismClientMessaging.sendPrefixed("Failed to start Baritone mine.");
-                return;
-            }
-
-            long mineStartMs = System.currentTimeMillis();
-            boolean sawBaritoneActivity = false;
-
-            while (isCurrentRunActive()) {
-                boolean mineActive = AutismCompatManager.isBaritoneMineActive();
-                boolean baritoneBusy = AutismCompatManager.isBaritoneBusy();
-                if (mineActive || baritoneBusy) sawBaritoneActivity = true;
-
-                String stopReason = null;
-                int minedDelta = 0;
-
-                if (mineTracker != null) {
-                    mineTracker.poll(mc);
-                    minedDelta = mineTracker.destroyedCount();
-                    setCurrentStatus("Mining: " + mineDesc + " (" + minedDelta + "/" + mineAction.minedCountTarget + ")");
-                    if (minedDelta >= mineAction.minedCountTarget) {
-                        stopReason = "Mine target reached";
-                    }
-                }
-
-                if (stopReason == null && mineAction.stopInventoryFull && isInventoryFull(mc)) {
-                    stopReason = "Mine stop: inventory full";
-                }
-
-                if (stopReason == null && mineAction.stopSlotsUsed) {
-                    int used = countUsedMainInventorySlots(mc);
-                    if (used >= mineAction.slotsUsedThreshold) {
-                        stopReason = "Mine stop: slots used";
-                    }
-                }
-
-                if (stopReason == null && mineAction.stopAfterTime
-                    && System.currentTimeMillis() - mineStartMs >= mineAction.timeoutSeconds * 1000L) {
-                    stopReason = "Mine timeout";
-                }
-
-                if (stopReason != null) {
-                    setCurrentStatus(stopReason);
-                    requestOwnedBaritoneStop(run, mc);
-                    waitForBaritoneIdle();
-                    return;
-                }
-
-                if (sawBaritoneActivity && !mineActive && !baritoneBusy) {
-                    setCurrentStatus("Mine finished");
-                    return;
-                }
-
-                if (!sawBaritoneActivity && System.currentTimeMillis() - mineStartMs >= 1500 && !mineActive && !baritoneBusy) {
-                    setCurrentStatus("Mine finished");
-                    return;
-                }
-
-                CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                waitForCondition(tickFuture);
-            }
-        } finally {
-            if (run != null && run.activeMineTracker == mineTracker) run.activeMineTracker = null;
-            if (!isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
-            else releaseBaritoneOwner(run);
-        }
-    }
-
-    private static boolean runBaritoneStart(Minecraft mc, java.util.function.BooleanSupplier starter) throws InterruptedException {
-        return runBaritoneStart(mc, starter, false);
-    }
-
-    private static boolean runBaritoneStart(Minecraft mc, java.util.function.BooleanSupplier starter,
-                                            boolean tickAligned) throws InterruptedException {
-        RunState run = CURRENT_RUN.get();
-        if (run != null) BARITONE_OWNER.set(run);
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AtomicBoolean started = new AtomicBoolean(false);
-
-        Runnable task = () -> {
-            try {
-                started.set(starter.getAsBoolean());
-            } finally {
-                latch.countDown();
-            }
-        };
-        if (tickAligned && !mc.isSameThread()) MacroClientThread.TICK_ALIGNED.add(task);
-        else mc.execute(task);
-
-        latch.await(2, TimeUnit.SECONDS);
-        if (!started.get()) releaseBaritoneOwner(run);
-        return started.get();
-    }
-
-    private static void requestBaritoneStop(Minecraft mc) {
-        if (mc == null || !AutismCompatManager.isBaritoneAvailable()) return;
-        mc.execute(() -> AutismCompatManager.stopBaritone(mc));
-    }
-
-    private static void requestOwnedBaritoneStop(RunState run, Minecraft mc) {
-        if (run == null || !BARITONE_OWNER.compareAndSet(run, null)) return;
-        requestBaritoneStop(mc);
-    }
-
-    private static void releaseBaritoneOwner(RunState run) {
-        if (run != null) BARITONE_OWNER.compareAndSet(run, null);
-    }
-
-    private static void waitForBaritoneIdle() {
-        long waitStartMs = System.currentTimeMillis();
-        while (isCurrentRunActive() && AutismCompatManager.isBaritoneBusy() && System.currentTimeMillis() - waitStartMs < 3000L) {
-            CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-            waitForCondition(tickFuture);
-        }
-    }
-
-    private static boolean isInventoryFull(Minecraft mc) {
-        if (mc.player == null) return false;
-
-        for (int slot = 9; slot < 36; slot++) {
-            if (mc.player.getInventory().getItem(slot).isEmpty()) return false;
-        }
-        return true;
-    }
-
-    private static int countUsedMainInventorySlots(Minecraft mc) {
-        if (mc.player == null) return 0;
-
-        int used = 0;
-        for (int slot = 9; slot < 36; slot++) {
-            if (!mc.player.getInventory().getItem(slot).isEmpty()) used++;
-        }
-        return used;
-    }
-
-    private static final class MineProgressTracker {
-        private static final int POLL_RADIUS = 8;
-        private final java.util.Set<net.minecraft.world.level.block.Block> targetBlocks;
-        private final java.util.HashMap<Long, Boolean> observedTargetPositions = new java.util.HashMap<>();
-        private final java.util.HashSet<Long> countedPositions = new java.util.HashSet<>();
-        private int destroyed;
-
-        private MineProgressTracker(java.util.Set<net.minecraft.world.level.block.Block> targetBlocks) {
-            this.targetBlocks = targetBlocks;
-        }
-
-        static MineProgressTracker create(Minecraft mc, java.util.List<String> rawTargets) {
-            java.util.Set<net.minecraft.world.level.block.Block> blocks = new java.util.LinkedHashSet<>();
-            if (rawTargets != null) {
-                for (String raw : rawTargets) {
-                    net.minecraft.world.level.block.Block block = resolveBlock(raw);
-                    if (block != null && block != net.minecraft.world.level.block.Blocks.AIR) blocks.add(block);
-                }
-            }
-            if (blocks.isEmpty()) return null;
-            return new MineProgressTracker(blocks);
-        }
-
-        private static net.minecraft.world.level.block.Block resolveBlock(String raw) {
-            if (raw == null || raw.isBlank()) return null;
-            String value = raw.trim();
-            try {
-                net.minecraft.resources.Identifier id = value.contains(":")
-                    ? net.minecraft.resources.Identifier.parse(value)
-                    : net.minecraft.resources.Identifier.fromNamespaceAndPath("minecraft", value);
-                if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id)) return null;
-                return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-
-        synchronized int destroyedCount() {
-            return destroyed;
-        }
-
-        synchronized void poll(Minecraft mc) {
-            if (mc == null || mc.player == null || mc.level == null) return;
-            BlockPos center = mc.player.blockPosition();
-            int minY = Math.max(mc.level.getMinY(), center.getY() - POLL_RADIUS);
-            int maxY = Math.min(mc.level.getMaxY() - 1, center.getY() + POLL_RADIUS);
-            for (int x = center.getX() - POLL_RADIUS; x <= center.getX() + POLL_RADIUS; x++) {
-                for (int y = minY; y <= maxY; y++) {
-                    for (int z = center.getZ() - POLL_RADIUS; z <= center.getZ() + POLL_RADIUS; z++) {
-                        BlockPos pos = new BlockPos(x, y, z);
-                        updateObservedPosition(pos, mc.level.getBlockState(pos));
-                    }
-                }
-            }
-        }
-
-        synchronized void observePacket(Minecraft mc, Packet<?> packet) {
-            if (mc == null || mc.level == null || packet == null) return;
-
-            if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket blockUpdate) {
-                observeBlockChange(mc, blockUpdate.getPos(), blockUpdate.getBlockState());
-            } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket sectionUpdate) {
-                try {
-                    sectionUpdate.runUpdates((pos, state) -> {
-                        if (pos != null && state != null) observeBlockChange(mc, pos, state);
-                    });
-                } catch (Throwable ignored) {  }
-            }
-        }
-
-        private void observeBlockChange(Minecraft mc, BlockPos pos, BlockState newState) {
-            if (mc == null || mc.level == null || pos == null || newState == null) return;
-            if (!isNearPlayer(mc, pos)) return;
-            BlockPos stablePos = new BlockPos(pos.getX(), pos.getY(), pos.getZ());
-            BlockState oldState = mc.level.getBlockState(stablePos);
-            if (isTarget(oldState) && !isTarget(newState)) {
-                countDestroyed(stablePos.asLong());
-            }
-            updateObservedPosition(stablePos, newState);
-        }
-
-        private boolean isNearPlayer(Minecraft mc, BlockPos pos) {
-            if (mc == null || mc.player == null || pos == null) return false;
-            BlockPos playerPos = mc.player.blockPosition();
-            int radius = POLL_RADIUS + 4;
-            return Math.abs(pos.getX() - playerPos.getX()) <= radius
-                && Math.abs(pos.getY() - playerPos.getY()) <= radius
-                && Math.abs(pos.getZ() - playerPos.getZ()) <= radius;
-        }
-
-        private void updateObservedPosition(BlockPos pos, BlockState state) {
-            if (pos == null || state == null) return;
-            long key = pos.asLong();
-            boolean nowTarget = isTarget(state);
-            boolean wasTarget = Boolean.TRUE.equals(observedTargetPositions.get(key));
-            if (nowTarget) {
-                observedTargetPositions.put(key, Boolean.TRUE);
-            } else {
-                if (wasTarget) countDestroyed(key);
-                observedTargetPositions.remove(key);
-            }
-        }
-
-        private boolean isTarget(BlockState state) {
-            return state != null && targetBlocks.contains(state.getBlock());
-        }
-
-        private void countDestroyed(long posKey) {
-            if (countedPositions.add(posKey)) destroyed++;
-        }
-    }
-
-    private static void runPayAction(Minecraft mc, PayAction payAction) throws InterruptedException {
-        payAction.delayMs = PayAction.normalizeDelay(payAction.delayMs);
-        java.util.List<String> targets = new java.util.ArrayList<>();
-        for (String player : payAction.players) {
-            if (player == null) continue;
-            MacroTemplate.Resolution playerResolution = MacroVariables.resolve(player, mc);
-            if (!playerResolution.success()) continue;
-            String trimmed = playerResolution.value().trim();
-            if (!trimmed.isEmpty() && !targets.contains(trimmed)) targets.add(trimmed);
-        }
-
-        if (targets.isEmpty()) targets.addAll(autismclient.util.AutismPlayerProbe.everyone(mc, payAction.probeHidden));
-        if (targets.isEmpty() || mc.getConnection() == null) return;
-
-        MacroTemplate.Resolution amountResolution = MacroVariables.resolve(payAction.amountInput, mc);
-        if (!amountResolution.success()) return;
-        long resolvedAmount = Math.max(0L, PayAction.parseAmount(amountResolution.value()));
-
-        long[] dividedAmounts = payAction.divideEnabled ? PayAction.distribute(resolvedAmount, targets.size()) : null;
-        int sent = 0;
-
-        for (int i = 0; i < targets.size(); i++) {
-            if (!isCurrentRunActive()) break;
-            String player = targets.get(i);
-
-            long perAmount = dividedAmounts != null ? dividedAmounts[i] : resolvedAmount;
-            if (perAmount <= 0L) continue;
-            String amountValue = String.valueOf(perAmount);
-            String amountLabel = PayAction.formatAmount(perAmount);
-
-            String template = (payAction.commandTemplate == null || payAction.commandTemplate.isBlank())
-                ? "/pay <player> <amount>"
-                : payAction.commandTemplate;
-            String command = template
-                .replace("<player>", player)
-                .replace("{player}", player)
-                .replace("<amount>", amountValue)
-                .replace("{amount}", amountValue)
-                .trim();
-            MacroTemplate.Resolution commandResolution = MacroVariables.resolve(command, mc);
-            if (!commandResolution.success()) continue;
-            command = commandResolution.value().trim();
-            if (command.isEmpty()) continue;
-            final String commandToSend = command;
-
-            if (sent > 0 && payAction.delayEnabled && payAction.delayMs > 0) Thread.sleep(payAction.delayMs);
-
-            setCurrentStatus("Paying " + player + " " + amountLabel + " (" + (sent + 1) + "/" + targets.size() + ")");
-
-            MacroClientThread.runOnClientThread(mc, () -> {
-                try {
-                    if (PackHideState.isHardLocked() || mc.getConnection() == null) return;
-                    if (commandToSend.startsWith("/") && commandToSend.length() > 1) {
-                        mc.getConnection().sendCommand(commandToSend.substring(1));
-                    } else {
-                        mc.getConnection().sendChat(commandToSend);
-                    }
-                } catch (Exception e) {
-                    AutismClientMessaging.sendPrefixed("\u00a7cPay failed: " + e.getMessage());
-                }
-            });
-
-            sent++;
-
-            if (payAction.confirmMacro != null && !payAction.confirmMacro.isBlank()) {
-                setCurrentStatus("Confirming " + player);
-                PayAction.runConfirmMacro(payAction.confirmMacro, () -> !isCurrentRunActive());
-            }
-        }
-    }
 
     public static void stop() {
         String macroName = (currentMacro != null && currentMacro.name != null) ? currentMacro.name : "";
@@ -3693,7 +3099,7 @@ public class MacroExecutor {
         if (s2c && mineWork) {
             Minecraft mc = Minecraft.getInstance();
             for (RunState run : runs) {
-                MineProgressTracker tracker = run.running.get() ? run.activeMineTracker : null;
+                MacroWorldActions.MineProgressTracker tracker = run.running.get() ? run.activeMineTracker : null;
                 if (tracker != null) tracker.observePacket(mc, packet);
             }
         }
