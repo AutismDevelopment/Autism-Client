@@ -243,8 +243,8 @@ public class MacroExecutor {
             return new InlineNextActions(java.util.List.of(), -1);
         }
     }
-    private record BreakStartPlan(int result, boolean instant, boolean interactFirst) {}
-    private record BreakContinuePlan(int result, boolean breaksThisTick, boolean breaksNextTick) {}
+    record BreakStartPlan(int result, boolean instant, boolean interactFirst) {}
+    record BreakContinuePlan(int result, boolean breaksThisTick, boolean breaksNextTick) {}
     record MacroEvent(Packet<?> packet, String direction, long nanoTime, ChatCapture chatCapture,
                               java.util.Map<String, MacroValue> captures) {
         MacroEvent(Packet<?> packet, String direction, long nanoTime, ChatCapture chatCapture) {
@@ -713,7 +713,7 @@ public class MacroExecutor {
         });
     }
 
-    private static void applyAggregateSneakState(Minecraft mc) {
+    static void applyAggregateSneakState(Minecraft mc) {
         if (mc == null || mc.options == null || mc.options.keyShift == null) return;
         boolean held = hasPersistentInput(SneakAction.class);
         mc.options.keyShift.setDown(held);
@@ -1497,7 +1497,7 @@ public class MacroExecutor {
                         runMineAction(mc, mna);
                     }
                     else if (action instanceof InstaBreakAction) {
-                        runInstaBreakAction(mc, (InstaBreakAction) action);
+                        MacroBreak.runInstaBreakAction(mc, (InstaBreakAction) action);
                     }
                     else if (action instanceof BreakAction breakAction) {
                         InlineNextActions nextActions = InlineNextActions.empty();
@@ -1505,7 +1505,7 @@ public class MacroExecutor {
                             nextActions = collectInlineNextActions(macro.actions, i);
                             breakAction.setNextActions(nextActions.actions());
                         }
-                        runBreakAction(mc, breakAction);
+                        MacroBreak.runBreakAction(mc, breakAction);
                         if (breakAction.didRunNextActions() && nextActions.lastIndex() > i) i = nextActions.lastIndex();
                     }
 
@@ -2358,9 +2358,9 @@ public class MacroExecutor {
             MineAction mna = (MineAction) action;
             runMineAction(mc, mna);
         } else if (action instanceof InstaBreakAction) {
-            runInstaBreakAction(mc, (InstaBreakAction) action);
+            MacroBreak.runInstaBreakAction(mc, (InstaBreakAction) action);
         } else if (action instanceof BreakAction) {
-            runBreakAction(mc, (BreakAction) action);
+            MacroBreak.runBreakAction(mc, (BreakAction) action);
         } else if (action instanceof PlaceAction) {
             runPlaceAction(mc, (PlaceAction) action);
         } else if (action instanceof UseItemAction) {
@@ -2660,531 +2660,6 @@ public class MacroExecutor {
         waitForCondition(tickFuture);
     }
 
-    private static void runInstaBreakAction(Minecraft mc, InstaBreakAction action) throws InterruptedException {
-        if (mc == null || mc.player == null || mc.level == null || mc.getConnection() == null || mc.gameMode == null) {
-            AutismClientMessaging.sendPrefixed("\u00a7cInstaBreak: missing world or connection");
-            return;
-        }
-
-        BlockPos target = action.blockPos == null ? BlockPos.ZERO : action.blockPos;
-        Direction direction = action.direction == null ? Direction.UP : action.direction;
-        int delayTicks = Math.max(0, action.delayTicks);
-        int targetTimes = Math.max(0, action.times);
-        int completed = 0;
-        boolean wasSolid = !isInstaBreakAir(mc, target);
-
-        if (!ensureInstaBreakPickaxe(mc, action)) return;
-
-        AutismInstaBreakRenderer.setTarget(target);
-        try {
-            long lastAttemptTick = AutismSharedState.get().getClientTickCounter() - (delayTicks + 1L);
-            long lastSneakTick = Long.MIN_VALUE;
-            while (isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
-
-                if (action.sneak) {
-                    long sneakTick = AutismSharedState.get().getClientTickCounter();
-                    if (sneakTick != lastSneakTick) {
-                        lastSneakTick = sneakTick;
-                        final String sneakMode = action.sneakMode;
-                        runOnClientThread(mc, () -> holdMacroSneak(mc, sneakMode), action.isTickAligned());
-                    }
-                }
-
-                boolean isAir = isInstaBreakAir(mc, target);
-                if (wasSolid && isAir) {
-                    completed++;
-                    setCurrentStatus("InstaBreak " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
-                    if (targetTimes > 0 && completed >= targetTimes) return;
-                    wasSolid = false;
-                } else if (!isAir) {
-                    wasSolid = true;
-                }
-
-                if (!isAir) {
-                    long currentTick = AutismSharedState.get().getClientTickCounter();
-                    if (currentTick != lastAttemptTick && (currentTick - lastAttemptTick) >= delayTicks) {
-                        lastAttemptTick = currentTick;
-                        if (!ensureInstaBreakPickaxe(mc, action)) return;
-                        if (action.interact) {
-
-                            InteractTiming t = action.interactTiming;
-                            boolean interactFirst = t == InteractTiming.BEFORE || t == InteractTiming.WITH
-                                || (t == InteractTiming.CUSTOM && action.interactCustomMs < 0);
-                            long ns = t == InteractTiming.CUSTOM
-                                ? Math.abs((long) action.interactCustomMs) * 1_000_000L : 0L;
-                            if (interactFirst) {
-                                runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
-                                if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-                                sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
-                            } else if (t == InteractTiming.AFTER_PLUS) {
-                                sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
-                                waitOneTick();
-                                runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
-                            } else {
-                                sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
-                                if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-                                runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
-                            }
-                        } else {
-                            sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
-                        }
-                    }
-                }
-
-                setCurrentStatus("InstaBreak " + target.getX() + "," + target.getY() + "," + target.getZ()
-                    + " " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
-
-                Thread.sleep(1);
-            }
-        } finally {
-            if (action.sneak) {
-                final String sneakMode = action.sneakMode;
-                try {
-                    runOnClientThread(mc, () -> releaseMacroSneak(mc, sneakMode));
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            AutismInstaBreakRenderer.clearTarget(target);
-        }
-    }
-
-    private static boolean isInstaBreakAir(Minecraft mc, BlockPos pos) {
-
-        return mc.level == null || mc.level.isOutsideBuildHeight(pos) || mc.level.getBlockState(pos).isAir();
-    }
-
-    private static boolean isActionStillInCurrentMacro(MacroAction action) {
-        RunState run = CURRENT_RUN.get();
-        if (run == null || run.macro == null || run.macro.actions == null) return true;
-        return run.macro.actions.contains(action);
-    }
-
-    private static boolean ensureInstaBreakPickaxe(Minecraft mc, InstaBreakAction action) throws InterruptedException {
-
-        return callOnClientThread(mc, () -> {
-            if (mc.player == null) return false;
-            if (mc.player.getMainHandItem().is(ItemTags.PICKAXES)) return true;
-            if (!action.autoPickaxe) return false;
-
-            int preferred = Math.max(0, Math.min(8, mc.player.getInventory().getSelectedSlot()));
-            for (int slot = 0; slot < 9; slot++) {
-                if (mc.player.getInventory().getItem(slot).is(ItemTags.PICKAXES)) {
-                    AutismInventoryHelper.selectHotbarSlot(mc, slot);
-                    return true;
-                }
-            }
-
-            for (int slot = 9; slot < 36; slot++) {
-                if (mc.player.getInventory().getItem(slot).is(ItemTags.PICKAXES)) {
-                    if (!AutismInventoryHelper.swapInventorySlots(mc, slot, preferred)) return false;
-                    AutismInventoryHelper.selectHotbarSlot(mc, preferred);
-                    return true;
-                }
-            }
-
-            return false;
-        }, false, action.isTickAligned());
-    }
-
-    private static void sendInstaBreakAttempt(Minecraft mc, BlockPos pos, Direction direction, boolean tickAligned) throws InterruptedException {
-        runOnClientThread(mc, () -> {
-            if (mc.player == null || mc.level == null || mc.gameMode == null || mc.getConnection() == null) return;
-            BlockPos blockPos = pos.immutable();
-            Direction dir = direction == null ? Direction.UP : direction;
-
-            if (mc.gameMode instanceof AutismMultiPlayerGameModeAccessor accessor) {
-                accessor.autism$startPrediction(mc.level, sequence -> new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, blockPos, dir, sequence));
-                accessor.autism$startPrediction(mc.level, sequence -> new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, blockPos, dir, sequence));
-            } else {
-
-                mc.getConnection().send(new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, blockPos, dir));
-                mc.getConnection().send(new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, blockPos, dir));
-            }
-
-            mc.player.swing(InteractionHand.MAIN_HAND);
-        }, tickAligned);
-    }
-
-    private static void runBreakAction(Minecraft mc, BreakAction action) throws InterruptedException {
-        if (mc == null || mc.player == null || mc.level == null || mc.getConnection() == null || mc.gameMode == null) {
-            AutismClientMessaging.sendPrefixed("\u00a7cBreak: missing world or connection");
-            return;
-        }
-
-        final BlockPos target = action.blockPos == null ? BlockPos.ZERO : action.blockPos;
-        final Direction direction = action.direction == null ? Direction.UP : action.direction;
-        int startDelay = Math.max(0, action.delayTicks);
-        int targetTimes = Math.max(0, action.times);
-        int completed = 0;
-
-        if (startDelay > 0) waitBreakClientTicks(startDelay);
-
-        final boolean[] started = { false };
-        final boolean useNextSteps = action.interact && action.runNextSteps;
-        final boolean[] nextStepsFired = { false };
-        final boolean[] missingNextStepsWarned = { false };
-        AutismInstaBreakRenderer.setTarget(target);
-        long lastTick = -1L;
-        try {
-            while (isCurrentRunActive() && isActionStillInCurrentMacro(action)) {
-                long now = AutismSharedState.get().getClientTickCounter();
-                if (now == lastTick) {
-                    Thread.sleep(1);
-                    continue;
-                }
-                lastTick = now;
-
-                int result;
-                if (!started[0]) {
-                    result = useNextSteps
-                        ? startBreakWithNextSteps(mc, action, target, direction, started, nextStepsFired, missingNextStepsWarned)
-                        : callOnClientThread(mc, () -> startBreakOnClient(mc, action, target, direction, started), -1, action.isTickAligned());
-                } else if (action.interact && action.interactTiming == InteractTiming.CUSTOM) {
-                    result = useNextSteps
-                        ? breakCustomTickWithNextSteps(mc, action, target, direction, nextStepsFired, missingNextStepsWarned)
-                        : breakCustomTick(mc, action, target, direction);
-                } else {
-                    result = useNextSteps
-                        ? breakContinueWithNextSteps(mc, action, target, direction, nextStepsFired, missingNextStepsWarned)
-                        : callOnClientThread(mc, () -> breakContinueOnClient(mc, action, target, direction), -1, action.isTickAligned());
-                }
-
-                if (result < 0) {
-                    return;
-                } else if (result == 1) {
-                    boolean completedStartedBreak = started[0];
-                    if (useNextSteps && completedStartedBreak) {
-                        runBreakNextStepsAfterCompletion(mc, action, nextStepsFired, missingNextStepsWarned);
-                    } else if (action.interact && action.interactTiming == InteractTiming.AFTER_PLUS) {
-                        waitOneTick();
-                        runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
-                    }
-                    completed++;
-                    setCurrentStatus("Break " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
-                    if (targetTimes > 0 && completed >= targetTimes) return;
-                    started[0] = false;
-                    nextStepsFired[0] = false;
-                    waitForBreakSolid(mc, target);
-                } else {
-                    setCurrentStatus("Break " + target.getX() + "," + target.getY() + "," + target.getZ()
-                        + " " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
-                }
-            }
-        } finally {
-            final boolean wasMining = started[0];
-            runOnClientThread(mc, () -> {
-                if (wasMining && mc.gameMode != null && mc.gameMode.isDestroying()) mc.gameMode.stopDestroyBlock();
-                if (action.sneak) releaseMacroSneak(mc, action.sneakMode);
-            }, action.isTickAligned());
-            AutismInstaBreakRenderer.clearTarget(target);
-        }
-    }
-
-    private static int startBreakWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
-                                               boolean[] started, boolean[] nextStepsFired,
-                                               boolean[] missingNextStepsWarned) throws InterruptedException {
-        BreakStartPlan plan = callOnClientThread(mc, () -> prepareBreakStartOnClient(mc, action, pos), new BreakStartPlan(-1, false, false));
-        if (plan.result() != 0) return plan.result();
-
-        if (plan.instant() && plan.interactFirst()) {
-            runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!isCurrentRunActive()) return -1;
-        }
-
-        int result = callOnClientThread(mc, () -> startPreparedBreakOnClient(mc, action, pos, dir, started), -1, action.isTickAligned());
-        return result;
-    }
-
-    private static BreakStartPlan prepareBreakStartOnClient(Minecraft mc, BreakAction action, BlockPos pos) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) {
-            return new BreakStartPlan(-1, false, false);
-        }
-        if (mc.level.isOutsideBuildHeight(pos)) return new BreakStartPlan(1, false, false);
-        BlockState state = mc.level.getBlockState(pos);
-        if (state.isAir()) return new BreakStartPlan(1, false, false);
-
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-        if (action.autoTool) {
-            AutismAutoTool.equipBestTool(mc, state, action.considerInventory, true);
-            state = mc.level.getBlockState(pos);
-            if (state.isAir()) return new BreakStartPlan(1, false, false);
-        }
-
-        float startDelta = state.getDestroyProgress(mc.player, mc.player.level(), pos);
-        boolean instant = startDelta >= 1.0f;
-        boolean interactFirst = action.interact && (action.interactTiming == InteractTiming.BEFORE
-            || action.interactTiming == InteractTiming.WITH
-            || (action.interactTiming == InteractTiming.CUSTOM && action.interactCustomMs < 0));
-        return new BreakStartPlan(0, instant, interactFirst);
-    }
-
-    private static int startPreparedBreakOnClient(Minecraft mc, BreakAction action, BlockPos pos, Direction dir, boolean[] started) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) return -1;
-        if (mc.level.isOutsideBuildHeight(pos) || mc.level.getBlockState(pos).isAir()) return 1;
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-        mc.gameMode.startDestroyBlock(pos, dir);
-        mc.player.swing(InteractionHand.MAIN_HAND);
-        started[0] = true;
-        return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-    }
-
-    private static int startBreakOnClient(Minecraft mc, BreakAction action, BlockPos pos, Direction dir, boolean[] started) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) return -1;
-        BlockState state = mc.level.getBlockState(pos);
-        if (state.isAir() || mc.level.isOutsideBuildHeight(pos)) return 1;
-
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-        if (action.autoTool) {
-            AutismAutoTool.equipBestTool(mc, state, action.considerInventory, true);
-            state = mc.level.getBlockState(pos);
-        }
-
-        float startDelta = state.getDestroyProgress(mc.player, mc.player.level(), pos);
-        boolean instant = startDelta >= 1.0f;
-        boolean interactFirst = action.interact && (action.interactTiming == InteractTiming.BEFORE
-            || action.interactTiming == InteractTiming.WITH
-            || (action.interactTiming == InteractTiming.CUSTOM && action.interactCustomMs < 0));
-        if (instant && interactFirst) sendBlockInteract(mc, pos, dir);
-        mc.gameMode.startDestroyBlock(pos, dir);
-        mc.player.swing(InteractionHand.MAIN_HAND);
-        started[0] = true;
-        if (instant && action.interact && !interactFirst && action.interactTiming != InteractTiming.AFTER_PLUS) sendBlockInteract(mc, pos, dir);
-        return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-    }
-
-    private static int breakContinueWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
-                                                  boolean[] nextStepsFired,
-                                                  boolean[] missingNextStepsWarned) throws InterruptedException {
-        BreakContinuePlan plan = callOnClientThread(mc, () -> inspectBreakContinueOnClient(mc, action, pos), new BreakContinuePlan(-1, false, false));
-        if (plan.result() != 0) return plan.result();
-
-        InteractTiming timing = action.interactTiming;
-        if (timing == InteractTiming.BEFORE && plan.breaksNextTick()) {
-            runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!isCurrentRunActive()) return -1;
-        }
-        if (timing == InteractTiming.WITH && plan.breaksThisTick()) {
-            runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!isCurrentRunActive()) return -1;
-        }
-
-        int result = callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
-        return result;
-    }
-
-    private static BreakContinuePlan inspectBreakContinueOnClient(Minecraft mc, BreakAction action, BlockPos pos) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) {
-            return new BreakContinuePlan(-1, false, false);
-        }
-        BlockState state = mc.level.getBlockState(pos);
-        if (state.isAir()) return new BreakContinuePlan(1, false, false);
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-
-        boolean breaksThisTick = willBreakThisTick(mc, pos, state);
-        boolean breaksNextTick = !breaksThisTick && willBreakNextTick(mc, pos, state);
-        return new BreakContinuePlan(0, breaksThisTick, breaksNextTick);
-    }
-
-    private static int continueBreakOnClient(Minecraft mc, BreakAction action, BlockPos pos, Direction dir) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) return -1;
-        if (mc.level.getBlockState(pos).isAir()) return 1;
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-        mc.gameMode.continueDestroyBlock(pos, dir);
-        mc.player.swing(InteractionHand.MAIN_HAND);
-        return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-    }
-
-    private static int breakContinueOnClient(Minecraft mc, BreakAction action, BlockPos pos, Direction dir) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null || mc.getConnection() == null) return -1;
-        BlockState state = mc.level.getBlockState(pos);
-        if (state.isAir()) return 1;
-        if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-
-        boolean breaksThisTick = willBreakThisTick(mc, pos, state);
-        boolean breaksNextTick = !breaksThisTick && willBreakNextTick(mc, pos, state);
-        InteractTiming t = action.interactTiming;
-        if (action.interact && t == InteractTiming.BEFORE && breaksNextTick) sendBlockInteract(mc, pos, dir);
-        if (action.interact && t == InteractTiming.WITH && breaksThisTick) sendBlockInteract(mc, pos, dir);
-
-        mc.gameMode.continueDestroyBlock(pos, dir);
-        mc.player.swing(InteractionHand.MAIN_HAND);
-
-        if (action.interact && t == InteractTiming.AFTER && breaksThisTick) sendBlockInteract(mc, pos, dir);
-        return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-    }
-
-    private static int breakCustomTickWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
-                                                    boolean[] nextStepsFired,
-                                                    boolean[] missingNextStepsWarned) throws InterruptedException {
-        boolean willBreak = Boolean.TRUE.equals(callOnClientThread(mc, () -> {
-            if (mc.level == null || mc.player == null) return Boolean.FALSE;
-            BlockState state = mc.level.getBlockState(pos);
-            if (state.isAir()) return Boolean.FALSE;
-            return willBreakThisTick(mc, pos, state);
-        }, Boolean.FALSE));
-
-        if (!willBreak) {
-            return callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
-        }
-
-        long ns = Math.abs((long) action.interactCustomMs) * 1_000_000L;
-        int broke;
-        if (action.interactCustomMs < 0) {
-            runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
-            if (!isCurrentRunActive()) return -1;
-            if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            broke = callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
-        } else {
-            broke = callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
-        }
-        return broke;
-    }
-
-    private static int breakCustomTick(Minecraft mc, BreakAction action, BlockPos pos, Direction dir) throws InterruptedException {
-        boolean willBreak = Boolean.TRUE.equals(callOnClientThread(mc, () -> {
-            if (mc.level == null || mc.player == null) return Boolean.FALSE;
-            BlockState s = mc.level.getBlockState(pos);
-            if (s.isAir()) return Boolean.FALSE;
-            return willBreakThisTick(mc, pos, s);
-        }, Boolean.FALSE));
-
-        if (!willBreak) {
-
-            return callOnClientThread(mc, () -> {
-                if (mc.level == null || mc.gameMode == null || mc.player == null) return -1;
-                if (mc.level.getBlockState(pos).isAir()) return 1;
-                if (action.sneak) holdMacroSneak(mc, action.sneakMode);
-                mc.gameMode.continueDestroyBlock(pos, dir);
-                mc.player.swing(InteractionHand.MAIN_HAND);
-                return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-            }, -1, action.isTickAligned());
-        }
-
-        long ns = Math.abs((long) action.interactCustomMs) * 1_000_000L;
-        int broke;
-        if (action.interactCustomMs < 0) {
-
-            runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
-            if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            broke = callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
-        } else {
-
-            broke = callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
-            if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
-        }
-        return broke;
-    }
-
-    private static int breakAndDetectOnClient(Minecraft mc, BlockPos pos, Direction dir) {
-        if (mc.level == null || mc.gameMode == null || mc.player == null) return -1;
-        if (mc.level.getBlockState(pos).isAir()) return 1;
-        mc.gameMode.continueDestroyBlock(pos, dir);
-        mc.player.swing(InteractionHand.MAIN_HAND);
-        return mc.level.getBlockState(pos).isAir() ? 1 : 0;
-    }
-
-    private static boolean willBreakThisTick(Minecraft mc, BlockPos pos, BlockState state) {
-        float progress = (mc.gameMode instanceof AutismMultiPlayerGameModeAccessor acc) ? acc.autism$getDestroyProgress() : 0f;
-        float delta = state.getDestroyProgress(mc.player, mc.player.level(), pos);
-        return progress > 0f && (progress + delta) >= 1.0f;
-    }
-
-    private static boolean willBreakNextTick(Minecraft mc, BlockPos pos, BlockState state) {
-        float progress = (mc.gameMode instanceof AutismMultiPlayerGameModeAccessor acc) ? acc.autism$getDestroyProgress() : 0f;
-        float delta = state.getDestroyProgress(mc.player, mc.player.level(), pos);
-        return progress > 0f && (progress + 2f * delta) >= 1.0f;
-    }
-
-    private static void runBreakNextStepsOnce(Minecraft mc, BreakAction action, boolean[] fired, boolean[] missingWarned) throws InterruptedException {
-        if (fired != null && fired[0]) return;
-        java.util.List<MacroAction> actions = action.getNextActions();
-        if (actions == null || actions.isEmpty()) {
-            if (missingWarned != null && !missingWarned[0]) {
-                missingWarned[0] = true;
-                AutismClientMessaging.sendPrefixed("\u00a7cBreak: no next steps found. Add action(s) after this Break step.");
-            }
-            return;
-        }
-
-        if (fired != null) fired[0] = true;
-        action.markNextActionsRan();
-        String names = actions.size() == 1 ? actions.get(0).getDisplayName() : actions.size() + " steps";
-        setCurrentStatus("Break: next " + names);
-        AutismModule module = AutismModule.get();
-        boolean previousSuppressPostGui = Boolean.TRUE.equals(SUPPRESS_POST_GUI_AFTER.get());
-        try {
-            SUPPRESS_POST_GUI_AFTER.set(true);
-            for (MacroAction next : actions) {
-                if (next == null || !next.isEnabled() || !isCurrentRunActive()) continue;
-                try {
-                    executeSingleActionWithWaits(mc, next, module);
-                } catch (InterruptedException e) {
-                    throw e;
-                } catch (Throwable t) {
-                    AutismClientMessaging.sendPrefixed("\u00a7cBreak next step failed (" + next.getDisplayName() + "): " + MacroRace.safeThrowableMessage(t));
-                }
-            }
-        } finally {
-            SUPPRESS_POST_GUI_AFTER.set(previousSuppressPostGui);
-        }
-    }
-
-    private static void runBreakNextStepsAfterCompletion(Minecraft mc, BreakAction action, boolean[] fired,
-                                                         boolean[] missingWarned) throws InterruptedException {
-        if (!action.interact || !action.runNextSteps || action.interactTiming == null) return;
-        switch (action.interactTiming) {
-            case AFTER -> runBreakNextStepsOnce(mc, action, fired, missingWarned);
-            case AFTER_PLUS -> {
-                waitOneTick();
-                runBreakNextStepsOnce(mc, action, fired, missingWarned);
-            }
-            case CUSTOM -> {
-                if (action.interactCustomMs >= 0) {
-                    long ns = Math.abs((long) action.interactCustomMs) * 1_000_000L;
-                    if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-                    runBreakNextStepsOnce(mc, action, fired, missingWarned);
-                }
-            }
-            default -> {
-            }
-        }
-    }
-
-    private static void sendBlockInteract(Minecraft mc, BlockPos pos, Direction dir) {
-        if (mc.gameMode == null || mc.player == null) return;
-        Vec3 hit = Vec3.atCenterOf(pos).add(dir.getStepX() * 0.5, dir.getStepY() * 0.5, dir.getStepZ() * 0.5);
-        BlockHitResult blockHit = new BlockHitResult(hit, dir, pos, false);
-        mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, blockHit);
-    }
-
-    private static void waitForBreakSolid(Minecraft mc, BlockPos pos) throws InterruptedException {
-        while (isCurrentRunActive()) {
-            if (!isInstaBreakAir(mc, pos)) return;
-            Thread.sleep(1);
-        }
-    }
-
-    private static void waitBreakClientTicks(int ticks) throws InterruptedException {
-        long start = AutismSharedState.get().getClientTickCounter();
-        while (isCurrentRunActive() && (AutismSharedState.get().getClientTickCounter() - start) < ticks) {
-            Thread.sleep(1);
-        }
-    }
-
-    private static void holdMacroSneak(Minecraft mc, String mode) {
-        autismclient.util.AutismMacroSneak.hold(mc, mode);
-    }
-
-    private static void releaseMacroSneak(Minecraft mc, String mode) {
-        autismclient.util.AutismMacroSneak.release(mc, mode);
-        if (!autismclient.util.AutismMacroSneak.isPacket(mode)) applyAggregateSneakState(mc);
-    }
 
     static void runOnClientThread(Minecraft mc, Runnable runnable) throws InterruptedException {
         if (PackHideState.isHardLocked()) return;
@@ -3352,24 +2827,24 @@ public class MacroExecutor {
 
         if (interactFirst) {
 
-            runOnClientThread(mc, () -> sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
         } else if (t == InteractTiming.WITH) {
 
             runOnClientThread(mc, () -> {
                 try { action.execute(mc); } catch (Exception e) { AutismClientAddon.LOG.debug("[Autism] Macro WITH-interact action failed", e); }
-                sendBlockInteract(mc, placePos, face);
+                MacroBreak.sendBlockInteract(mc, placePos, face);
             }, action.isTickAligned());
         } else if (t == InteractTiming.AFTER_PLUS) {
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
             waitOneTick();
-            runOnClientThread(mc, () -> sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
         } else {
 
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            runOnClientThread(mc, () -> sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
         }
     }
 
