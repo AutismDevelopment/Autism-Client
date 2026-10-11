@@ -47,7 +47,7 @@ final class MacroRace {
                 disablePacketGate(mc, action);
             }
             case UNTIL_GUI -> {
-                MacroExecutor.waitForPredicate(() -> MacroGuiMatcher.matches(mc.gui.screen(), action.untilGuiType, action.untilGuiTitle), Math.max(0, action.durationValue));
+                MacroRunLoop.waitForPredicate(() -> MacroGuiMatcher.matches(mc.gui.screen(), action.untilGuiType, action.untilGuiTitle), Math.max(0, action.durationValue));
                 disablePacketGate(mc, action);
             }
             case UNTIL_INVENTORY -> {
@@ -58,7 +58,7 @@ final class MacroRace {
                 wait.slot = action.untilInventorySlot;
                 wait.timeoutMs = Math.max(0, action.durationValue);
                 wait.resetBaseline();
-                MacroExecutor.waitForPredicate(() -> wait.matches(mc), wait.timeoutMs);
+                MacroRunLoop.waitForPredicate(() -> wait.matches(mc), wait.timeoutMs);
                 disablePacketGate(mc, action);
             }
             default -> {}
@@ -96,7 +96,7 @@ final class MacroRace {
             if (isMacroStepSatisfied(action)) return;
             if (action.timeoutMs > 0 && System.currentTimeMillis() - startMs >= action.timeoutMs) return;
             CompletableFuture<Void> tick = MacroConditionRegistry.waitForNextTick();
-            MacroExecutor.waitForCondition(tick);
+            MacroRunLoop.waitForCondition(tick);
         }
     }
 
@@ -730,7 +730,7 @@ final class MacroRace {
                 try {
                     if (delay.useTicks) {
                         for (int i = 0; i < delay.delayTicks && MacroExecutor.isCurrentRunActive(); i++) {
-                            MacroExecutor.waitForCondition(MacroConditionRegistry.waitForNextTick());
+                            MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick());
                         }
                     } else {
                         Thread.sleep(Math.max(0, delay.delayMs));

@@ -81,7 +81,7 @@ final class MacroPacketWait {
                 MacroExecutor.setCurrentStatus(normalizedTarget.isEmpty()
                     ? "Waiting for packet: Any"
                     : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
-                MacroExecutor.waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } finally {
                 synchronized (run.packetWaitLock) {
                     if (run.packetFuture == future) {
@@ -105,7 +105,7 @@ final class MacroPacketWait {
             MacroExecutor.setCurrentStatus(normalizedTarget.isEmpty()
                 ? "Waiting for packet: Any"
                 : "Waiting for packet: " + WaitForPacketAction.getDisplayLabel(normalizedTarget));
-            MacroExecutor.waitForCondition(future);
+            MacroRunLoop.waitForCondition(future);
         } finally {
             synchronized (MacroExecutor.packetWaitLock) {
                 if (MacroExecutor.activePacketFuture == future) {
@@ -127,7 +127,7 @@ final class MacroPacketWait {
             run.waitingForChat.set(true);
             try {
                 if (wca.timeoutMs > 0) future.completeOnTimeout(null, wca.timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-                MacroExecutor.waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
                 MacroPrearm.commitStagedCapture(wca);
             } finally {
                 if (run.chatFuture == future) {
@@ -148,7 +148,7 @@ final class MacroPacketWait {
         MacroExecutor.lastMatchedChat.set("");
         try {
             if (wca.timeoutMs > 0) future.completeOnTimeout(null, wca.timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-            MacroExecutor.waitForCondition(future);
+            MacroRunLoop.waitForCondition(future);
         } finally {
             MacroExecutor.isWaitingForChat.set(false);
             MacroExecutor.waitingChatPattern.set("");

@@ -83,10 +83,10 @@ public class MacroExecutor {
     static final long MACRO_WAIT_POLL_NANOS = 500_000L;
 
     static final long CAPTURE_SETTLE_MS = 300L;
-    private static final AtomicBoolean isRunning = new AtomicBoolean(false);
+    static final AtomicBoolean isRunning = new AtomicBoolean(false);
     public static final int MAX_CONCURRENT_MACROS = 4;
     static final Object RUN_LOCK = new Object();
-    private static final EnumMap<SharedClientResource, ReentrantLock> SHARED_RESOURCE_LOCKS = new EnumMap<>(SharedClientResource.class);
+    static final EnumMap<SharedClientResource, ReentrantLock> SHARED_RESOURCE_LOCKS = new EnumMap<>(SharedClientResource.class);
     static {
         for (SharedClientResource resource : SharedClientResource.values()) {
             SHARED_RESOURCE_LOCKS.put(resource, new ReentrantLock(true));
@@ -108,7 +108,7 @@ public class MacroExecutor {
     private static String currentStatus = "";
 
     private static volatile int currentStepIndex = -1;
-    private static volatile int totalSteps = 0;
+    static volatile int totalSteps = 0;
 
     static final AtomicBoolean isWaitingForPacket = new AtomicBoolean(false);
     static final AtomicReference<String> waitingPacketName = new AtomicReference<>("");
@@ -148,7 +148,7 @@ public class MacroExecutor {
     private static final java.util.concurrent.ConcurrentHashMap<MoveAction, int[]> backgroundMoves =
         new java.util.concurrent.ConcurrentHashMap<>();
     static final ThreadLocal<RepeatPacketContext> REPEAT_PACKET_CONTEXT = new ThreadLocal<>();
-    private static final ThreadLocal<Integer> REPEAT_PACKET_SKIP = ThreadLocal.withInitial(() -> 0);
+    static final ThreadLocal<Integer> REPEAT_PACKET_SKIP = ThreadLocal.withInitial(() -> 0);
 
     static final class RunState {
         final long id;
@@ -238,7 +238,7 @@ public class MacroExecutor {
 
     record ChatCapture(String sender, String message, String displayText, Component displayComponent, ChatSource source) {}
     record RepeatPacketContext(AutismMacro macro, int startIdx, int endIdx) {}
-    private record InlineNextActions(java.util.List<MacroAction> actions, int lastIndex) {
+    record InlineNextActions(java.util.List<MacroAction> actions, int lastIndex) {
         static InlineNextActions empty() {
             return new InlineNextActions(java.util.List.of(), -1);
         }
@@ -299,7 +299,7 @@ public class MacroExecutor {
         };
     }
 
-    private static int performFlowJump(RunState run, AutismMacro macro, int currentI, FlowAction flow, Minecraft mc) {
+    static int performFlowJump(RunState run, AutismMacro macro, int currentI, FlowAction flow, Minecraft mc) {
         run.branchElseStart = -1;
         run.branchElseCount = 0;
         Integer dest = resolveFlowTarget(run, macro, currentI, flow, mc);
@@ -316,7 +316,7 @@ public class MacroExecutor {
             if (run.jumpBudget >= FLOW_JUMP_BURST_CAP) {
                 run.jumpBudget = 0;
 
-                try { waitForCondition(MacroConditionRegistry.waitForNextTick()); } catch (Exception ignored) {  }
+                try { MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick()); } catch (Exception ignored) {  }
             }
         } else {
             run.jumpBudget = 0;
@@ -335,12 +335,12 @@ public class MacroExecutor {
         return isCurrentRunActive();
     }
 
-    private static CopyOnWriteArrayList<MacroAction> currentPersistentActions() {
+    static CopyOnWriteArrayList<MacroAction> currentPersistentActions() {
         RunState run = CURRENT_RUN.get();
         return run != null ? run.persistentActions : persistentActions;
     }
 
-    private static ConcurrentHashMap<MoveAction, int[]> currentBackgroundMoves() {
+    static ConcurrentHashMap<MoveAction, int[]> currentBackgroundMoves() {
         RunState run = CURRENT_RUN.get();
         return run != null ? run.backgroundMoves : backgroundMoves;
     }
@@ -351,7 +351,7 @@ public class MacroExecutor {
         currentStatus = status == null ? "" : status;
     }
 
-    private static void setCurrentStep(int step, int total) {
+    static void setCurrentStep(int step, int total) {
         RunState run = CURRENT_RUN.get();
         if (run != null) {
             run.currentStepIndex = step;
@@ -361,27 +361,27 @@ public class MacroExecutor {
         totalSteps = total;
     }
 
-    private static void markStepCompleted(int stepOneBased) {
+    static void markStepCompleted(int stepOneBased) {
         RunState run = CURRENT_RUN.get();
         if (run != null) {
             run.lastCompletedStep = Math.max(run.lastCompletedStep, stepOneBased);
         }
     }
 
-    private static int stepOverrideEndIndex(AutismMacro macro, int headerIndex, int coveredRows) {
+    static int stepOverrideEndIndex(AutismMacro macro, int headerIndex, int coveredRows) {
         int last = macro == null ? headerIndex : macro.actions.size() - 1;
         long end = (long) headerIndex + Math.max(0, coveredRows);
         return (int) Math.max(headerIndex, Math.min(last, end));
     }
 
-    private static void armFpsStepOverride(RunState run, int headerIndex, int endIndexInclusive, int fpsLimit) {
+    static void armFpsStepOverride(RunState run, int headerIndex, int endIndexInclusive, int fpsLimit) {
         if (run == null) return;
         run.fpsStepHeaderIndex = headerIndex;
         run.fpsStepEndIndex = endIndexInclusive;
         FpsLimitController.applyUntilCleared(run.id, fpsLimit);
     }
 
-    private static void armPingStepOverride(RunState run, int headerIndex, int endIndexInclusive,
+    static void armPingStepOverride(RunState run, int headerIndex, int endIndexInclusive,
                                             int delayMs, boolean realIncoming, boolean realOutgoing) {
         if (run == null) return;
         run.pingStepHeaderIndex = headerIndex;
@@ -389,21 +389,21 @@ public class MacroExecutor {
         PingSpoofController.applyUntilCleared(run.id, delayMs, realIncoming, realOutgoing);
     }
 
-    private static void clearFpsStepOverride(RunState run) {
+    static void clearFpsStepOverride(RunState run) {
         if (run == null || run.fpsStepHeaderIndex < 0) return;
         run.fpsStepHeaderIndex = -1;
         run.fpsStepEndIndex = -1;
         FpsLimitController.clear(run.id);
     }
 
-    private static void clearPingStepOverride(RunState run) {
+    static void clearPingStepOverride(RunState run) {
         if (run == null || run.pingStepHeaderIndex < 0) return;
         run.pingStepHeaderIndex = -1;
         run.pingStepEndIndex = -1;
         PingSpoofController.clearMacro(run.id);
     }
 
-    private static void awaitBackgroundTimedOverrides(RunState run) throws InterruptedException {
+    static void awaitBackgroundTimedOverrides(RunState run) throws InterruptedException {
         if (run == null) return;
 
         long deadline = Math.max(run.fpsBackgroundDeadlineNanos, run.pingBackgroundDeadlineNanos);
@@ -413,7 +413,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void updateStepBoundOverrides(RunState run, int index) {
+    static void updateStepBoundOverrides(RunState run, int index) {
         if (run == null) return;
         if (run.fpsStepHeaderIndex >= 0 && (index > run.fpsStepEndIndex || index <= run.fpsStepHeaderIndex)) {
             clearFpsStepOverride(run);
@@ -423,7 +423,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void stopCurrentRun() {
+    static void stopCurrentRun() {
         RunState run = CURRENT_RUN.get();
         if (run != null) {
             run.running.set(false);
@@ -494,7 +494,7 @@ public class MacroExecutor {
         }
     }
 
-    private static InlineNextActions collectInlineNextActions(java.util.List<MacroAction> actions, int currentIndex) {
+    static InlineNextActions collectInlineNextActions(java.util.List<MacroAction> actions, int currentIndex) {
         if (actions == null || currentIndex < 0 || currentIndex >= actions.size() - 1) return InlineNextActions.empty();
         java.util.ArrayList<MacroAction> collected = new java.util.ArrayList<>();
         int lastIndex = -1;
@@ -526,7 +526,7 @@ public class MacroExecutor {
         return ACTIVE_RUN_LIST;
     }
 
-    private static void finishCurrentRun() {
+    static void finishCurrentRun() {
         RunState run = CURRENT_RUN.get();
         if (run == null) return;
         if (!run.finished.compareAndSet(false, true)) return;
@@ -617,7 +617,7 @@ public class MacroExecutor {
         return false;
     }
 
-    private static void broadcastStepProgress(RunState run, int step, int total, String macroName) {
+    static void broadcastStepProgress(RunState run, int step, int total, String macroName) {
         if (run != null && run.options.skipLanProgress()) return;
         try {
             autismclient.util.AutismLANSync sync = autismclient.util.AutismLANSync.getInstance();
@@ -667,7 +667,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void releaseBackgroundMoves(ConcurrentHashMap<MoveAction, int[]> moves, Minecraft mc, RunState owner) {
+    static void releaseBackgroundMoves(ConcurrentHashMap<MoveAction, int[]> moves, Minecraft mc, RunState owner) {
         if (moves == null || moves.isEmpty() || mc == null) return;
         List<MoveAction> toRelease = new ArrayList<>(moves.keySet());
         mc.execute(() -> {
@@ -679,7 +679,7 @@ public class MacroExecutor {
         });
     }
 
-    private static void releaseMoveIfUnused(RunState owner, MoveAction move, Minecraft mc) {
+    static void releaseMoveIfUnused(RunState owner, MoveAction move, Minecraft mc) {
         if (move == null || mc == null) return;
         boolean stillOwned = false;
         synchronized (RUN_LOCK) {
@@ -719,7 +719,7 @@ public class MacroExecutor {
         mc.options.keyShift.setDown(held);
     }
 
-    private static void applyAggregateSprintState(Minecraft mc) {
+    static void applyAggregateSprintState(Minecraft mc) {
         if (mc == null) return;
         boolean held = hasPersistentInput(SprintAction.class);
         if (mc.options != null && mc.options.keySprint != null) mc.options.keySprint.setDown(held);
@@ -815,7 +815,7 @@ public class MacroExecutor {
 
         broadcastStepProgress(runState, 0, executionMacro.actions.size(), executionMacro.name);
 
-        Thread thread = new Thread(() -> run(runState), "Autism-Macro-" + runState.id);
+        Thread thread = new Thread(() -> MacroRunLoop.run(runState), "Autism-Macro-" + runState.id);
         thread.setDaemon(true);
         macroThread = thread;
         runState.macroThread = thread;
@@ -865,1253 +865,6 @@ public class MacroExecutor {
         }
     }
 
-    private static void run(RunState runState) {
-        CURRENT_RUN.set(runState);
-        try {
-            runInternal(runState);
-        } catch (Throwable fatal) {
-
-            if (!runState.options.silentLifecycle()) {
-                try { AutismClientMessaging.sendPrefixed("\u00a7cMacro crashed: " + fatal.getMessage()); } catch (Throwable ignored) {  }
-            }
-        } finally {
-            finishCurrentRun();
-            CURRENT_RUN.remove();
-        }
-    }
-
-    private static void runInternal(RunState runState) {
-        CURRENT_RUN.set(runState);
-        MacroVariables.clear();
-        AutismMacro macro = runState.macro;
-        Minecraft mc = Minecraft.getInstance();
-        int loopCount = 0;
-        int maxLoops = macro.loop ? (macro.loopCount == -1 ? Integer.MAX_VALUE : macro.loopCount) : 1;
-
-        currentPersistentActions().clear();
-        currentBackgroundMoves().clear();
-        Thread persistentThread = new Thread(() -> {
-            CURRENT_RUN.set(runState);
-            try {
-                while (isCurrentRunActive()) {
-                    if (!currentPersistentActions().isEmpty() || !currentBackgroundMoves().isEmpty()) {
-                        RunState scheduledRun = CURRENT_RUN.get();
-                        mc.execute(() -> withRunContext(scheduledRun, () -> {
-                            ReentrantLock inputLock = SHARED_RESOURCE_LOCKS.get(SharedClientResource.INPUT);
-                            inputLock.lock();
-                            try {
-
-                            for (MacroAction pa : currentPersistentActions()) {
-                                try { pa.execute(mc); } catch (Exception ignored) {  }
-                            }
-
-                            java.util.Iterator<java.util.Map.Entry<MoveAction, int[]>> it = currentBackgroundMoves().entrySet().iterator();
-                            while (it.hasNext()) {
-                                java.util.Map.Entry<MoveAction, int[]> entry = it.next();
-                                MoveAction bma = entry.getKey();
-                                int[] ticks = entry.getValue();
-                                if (ticks[0] > 0) {
-                                    bma.execute(mc);
-                                    ticks[0]--;
-                                } else {
-                                    releaseMoveIfUnused(scheduledRun, bma, mc);
-                                    currentBackgroundMoves().remove(bma);
-                                }
-                            }
-                            } finally {
-                                inputLock.unlock();
-                            }
-                        }));
-                    }
-
-                    try {
-                        CompletableFuture<Void> tf = MacroConditionRegistry.waitForNextTick();
-                        tf.get(100, java.util.concurrent.TimeUnit.MILLISECONDS);
-                    } catch (Exception e) {
-                        if (!isCurrentRunActive()) break;
-                    }
-                }
-            } finally {
-                releaseBackgroundMoves(currentBackgroundMoves(), mc, runState);
-                currentBackgroundMoves().clear();
-                CURRENT_RUN.remove();
-            }
-        }, "Autism-Macro-Persistent-" + runState.id);
-        persistentThread.setDaemon(true);
-        persistentThread.start();
-
-        try {
-            while (isCurrentRunActive() && loopCount < maxLoops) {
-                if (macro.actions.isEmpty()) {
-                    if (!runState.options.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7cMacro stopped: no actions left.");
-                    stopCurrentRun();
-                    break;
-                }
-                setCurrentStatus("Loop " + (loopCount + 1) + (maxLoops == Integer.MAX_VALUE ? "" : "/" + maxLoops));
-
-                AutismModule module = AutismModule.get();
-                boolean burstMode = module.usePacketBurstMode();
-
-                totalSteps = macro.actions.size();
-
-                runState.branchElseStart = -1;
-                runState.branchElseCount = 0;
-                runState.jumpBudget = 0;
-
-                runState.lastCompletedStep = 0;
-                for (int i = 0; i < macro.actions.size(); i++) {
-                    if (!isCurrentRunActive()) break;
-
-                    setCurrentStep(i, macro.actions.size());
-
-                    updateStepBoundOverrides(runState, i);
-                    if (runState.branchElseStart == i && runState.branchElseCount > 0) {
-                        i += runState.branchElseCount - 1;
-                        runState.branchElseStart = -1;
-                        runState.branchElseCount = 0;
-                        continue;
-                    }
-                    MacroAction action = macro.actions.get(i);
-
-                    if (!action.isEnabled()) {
-                        if (action instanceof RaceAction disabledRace) {
-                            i += disabledRace.normalizedBodyCount(macro.actions, i);
-                        } else if (action instanceof ReportAction disabledReport) {
-                            i += disabledReport.normalizedConditionCount(macro.actions, i);
-                        } else if (action instanceof MultiAction disabledMulti) {
-                            i += disabledMulti.normalizedStepCount(macro.actions, i);
-                        }
-                        continue;
-                    }
-
-                    if (!MacroDynamicBindings.apply(action, mc)) continue;
-                    if (!MacroActionRunner.dynamicTextInputsAvailable(action, mc)) continue;
-                    if (!MacroPrearm.hasPrearmedWait(action)) MacroPrearm.clearOwnCaptureOutput(action);
-
-                    if (action instanceof BranchAction branch) {
-                        boolean branchMatches = branch.matches(mc);
-                        if (branchMatches) {
-                            runState.branchElseStart = i + 1 + Math.max(0, branch.thenSteps);
-                            runState.branchElseCount = Math.max(0, branch.elseSteps);
-                        } else {
-                            i += Math.max(0, branch.thenSteps);
-                        }
-                        continue;
-                    }
-
-                    if (action instanceof FinallyAction cleanup) {
-                        int bodyCount = Math.max(0, cleanup.bodyCount);
-                        runState.finallyActions.clear();
-                        for (int c = 1; c <= bodyCount && i + c < macro.actions.size(); c++) {
-                            MacroAction body = macro.actions.get(i + c);
-                            if (body != null && body.isEnabled()) runState.finallyActions.add(body);
-                        }
-                        i += bodyCount;
-                        continue;
-                    }
-
-                    if (action instanceof IfAction ifA) {
-                        runState.branchElseStart = -1;
-                        runState.branchElseCount = 0;
-                        if (ifA.evaluate(mc)) {
-                            runState.branchElseStart = i + 1 + Math.max(0, ifA.thenSteps);
-                            runState.branchElseCount = Math.max(0, ifA.elseSteps);
-                        } else {
-                            i += Math.max(0, ifA.thenSteps);
-                        }
-                        continue;
-                    }
-
-                    if (action instanceof LabelAction) {
-                        continue;
-                    }
-
-                    if (action instanceof FlowAction flow) {
-                        if (flow.shouldTake(mc)) {
-                            int newI = performFlowJump(runState, macro, i, flow, mc);
-                            if (newI == Integer.MIN_VALUE) {
-                                broadcastStepProgress(runState, i + 1, macro.actions.size(), macro.name);
-                                stopCurrentRun();
-                                break;
-                            }
-                            i = newI;
-                        }
-                        continue;
-                    }
-
-                    MacroPrearm.prearmNextActionWait(mc, macro.actions, i);
-
-                    EnumSet<SharedClientResource> heldResources = acquireClientResources(action);
-                    try {
-
-                        if (!MacroActionRunner.waitForGuiBeforeAction(mc, action)) continue;
-                        MacroActionRunner.beginRaycastAim(mc, action);
-                        java.util.concurrent.CompletableFuture<Void> postGuiFuture =
-                                (action instanceof ItemAction || action instanceof DropAction || MacroActionRunner.isTargetWaitInteractionAction(action)) ? null : MacroActionRunner.createPostGuiFuture(mc, action);
-
-                        if (burstMode && action instanceof SendPacketAction) {
-
-                        java.util.List<SendPacketAction> packetBatch = new java.util.ArrayList<>();
-                        int batchEnd = i;
-
-                        while (batchEnd < macro.actions.size() &&
-                               macro.actions.get(batchEnd) instanceof SendPacketAction) {
-                            packetBatch.add((SendPacketAction) macro.actions.get(batchEnd));
-                            batchEnd++;
-                        }
-
-                        executeBurstPackets(mc, packetBatch);
-
-                        i = batchEnd - 1;
-                        continue;
-                    }
-
-                    if (action instanceof DelayAction) {
-                        DelayAction da = (DelayAction) action;
-                        if (da.useTicks) {
-
-                            for (int t = 0; t < da.delayTicks; t++) {
-                                if (!isCurrentRunActive()) break;
-
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForNextTick();
-                                waitForCondition(future);
-                            }
-                        } else {
-
-                            Thread.sleep(da.delayMs);
-                        }
-                    }
-                    else if (action instanceof CustomMenuAction customMenu) {
-                        setCurrentStatus(customMenu.getDisplayName());
-                        customMenu.execute(mc);
-                    }
-                    else if (action instanceof FpsAction fps) {
-                        setCurrentStatus(fps.getDisplayName());
-                        if (fps.endMode() == FpsAction.EndMode.TIMEOUT) {
-
-                            clearFpsStepOverride(runState);
-                            long fpsDurationNanos = fps.durationMillis() * 1_000_000L;
-                            long fpsDeadline = System.nanoTime() + fpsDurationNanos;
-                            FpsLimitController.apply(runState.id, Math.max(0, fps.maxFps), fpsDurationNanos);
-                            if (fps.continueNextActions) {
-
-                                runState.fpsBackgroundDeadlineNanos = fpsDeadline;
-                            } else {
-
-                                long fpsRemaining;
-                                while (isCurrentRunActive() && (fpsRemaining = fpsDeadline - System.nanoTime()) > 0L) {
-                                    Thread.sleep(Math.min(25L, fpsRemaining / 1_000_000L + 1L));
-                                }
-                                FpsLimitController.clear(runState.id);
-                                runState.fpsBackgroundDeadlineNanos = 0L;
-                            }
-                        } else {
-
-                            int covered = fps.endMode() == FpsAction.EndMode.END
-                                    ? macro.actions.size() - 1 - i
-                                    : fps.normalizedStepCount();
-                            int endIndex = stepOverrideEndIndex(macro, i, covered);
-
-                            armFpsStepOverride(runState, i, endIndex, Math.max(1, fps.maxFps));
-                            runState.fpsBackgroundDeadlineNanos = 0L;
-                        }
-
-                    }
-                    else if (action instanceof SPingAction sping) {
-                        setCurrentStatus(sping.getDisplayName());
-                        if (sping.endMode() == SPingAction.EndMode.TIMEOUT) {
-                            clearPingStepOverride(runState);
-                            long spingDurationNanos = sping.durationMillis() * 1_000_000L;
-                            long spingDeadline = System.nanoTime() + spingDurationNanos;
-                            PingSpoofController.apply(runState.id, Math.max(0, sping.pingDelayMs),
-                                sping.realIncoming, sping.realOutgoing, spingDurationNanos);
-                            if (sping.continueNextActions) {
-
-                                runState.pingBackgroundDeadlineNanos = spingDeadline;
-                            } else {
-
-                                long spingRemaining;
-                                while (isCurrentRunActive() && (spingRemaining = spingDeadline - System.nanoTime()) > 0L) {
-                                    Thread.sleep(Math.min(25L, spingRemaining / 1_000_000L + 1L));
-                                }
-                                PingSpoofController.clearMacro(runState.id);
-                                runState.pingBackgroundDeadlineNanos = 0L;
-                            }
-                        } else {
-                            int covered = sping.endMode() == SPingAction.EndMode.END
-                                    ? macro.actions.size() - 1 - i
-                                    : sping.normalizedStepCount();
-                            int endIndex = stepOverrideEndIndex(macro, i, covered);
-                            armPingStepOverride(runState, i, endIndex,
-                                    Math.max(0, sping.pingDelayMs), sping.realIncoming, sping.realOutgoing);
-                            runState.pingBackgroundDeadlineNanos = 0L;
-                        }
-
-                    }
-                    else if (action instanceof WaitForPacketAction packetAction) {
-                        packetAction.matchedPacket = null;
-                        packetAction.matchedDirection = "";
-                        RunState packetRun = CURRENT_RUN.get();
-                        if (packetRun != null) {
-                            packetRun.lastMatchedPacket = null;
-                            packetRun.lastMatchedPacketDirection = "";
-                        }
-                        java.util.List<String> targets = packetAction.effectiveList();
-                        PrearmedWait prearmed = MacroPrearm.consumePrearmedWait(action);
-                        int startTarget = 0;
-                        if (prearmed != null) {
-                            try {
-                                MacroRace.waitForFutureDone(prearmed.future, 0);
-                                startTarget = prearmed.completedPacketTargets;
-                            } finally {
-                                prearmed.cleanup();
-                            }
-                        }
-                        if (targets.isEmpty()) {
-                            if (prearmed == null) MacroPacketWait.awaitPacket("");
-                        } else {
-                            for (int targetIndex = Math.min(startTarget, targets.size()); targetIndex < targets.size(); targetIndex++) {
-                                if (!isCurrentRunActive()) break;
-                                MacroPacketWait.awaitPacket(targets.get(targetIndex));
-                            }
-                        }
-                        MacroPrearm.copyLastMatchedPacket(packetAction);
-                    }
-                    else if (action instanceof WaitPacketMatchAction wpma) {
-                        setCurrentStatus(wpma.getDisplayName());
-                        if (!MacroPrearm.waitForPrearmed(wpma, wpma.timeoutMs)) MacroPrearm.waitForPacketMatch(wpma);
-                    }
-                    else if (action instanceof WaitInventoryPredicateAction wipa) {
-                        setCurrentStatus(wipa.getDisplayName());
-                        if (!MacroPrearm.waitForPrearmed(wipa, wipa.timeoutMs)) waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
-                    }
-                    else if (action instanceof WaitDurabilityAction wda) {
-                        setCurrentStatus(wda.getDisplayName());
-                        if (wda.useNext) MacroDurability.waitForDurabilityUseNext(mc, wda);
-                        else if (!MacroPrearm.waitForPrearmed(wda, wda.timeoutMs)) waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
-                    }
-                    else if (action instanceof WaitFreeSlotsAction wfsa) {
-                        setCurrentStatus(wfsa.getDisplayName());
-                        if (!MacroPrearm.waitForPrearmed(wfsa, wfsa.timeoutMs)) waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
-                    }
-                    else if (action instanceof WaitEntityTargetAction weta) {
-                        setCurrentStatus(weta.getDisplayName());
-                        if (!MacroPrearm.waitForPrearmed(weta, weta.timeoutMs)) waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
-                    }
-                    else if (action instanceof WaitGuiTypeAction wgta) {
-                        setCurrentStatus(wgta.getDisplayName());
-                        if (!MacroPrearm.hasPrearmedWait(wgta)) MacroPrearm.clearCaptureOutputs(wgta);
-                        if (MacroPrearm.waitForPrearmed(wgta, wgta.timeoutMs)) {
-                        } else if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) {
-                            waitForPredicate(guiClosePredicate(wgta, mc), wgta.timeoutMs);
-                            MacroPrearm.commitStagedCapture(wgta);
-                        } else {
-                            waitForPredicate(() -> {
-                                var captured = wgta.capture(mc);
-                                captured.ifPresent(values -> MacroPrearm.stageCapture(wgta, values));
-                                return captured.isPresent();
-                            }, wgta.timeoutMs);
-                            MacroPrearm.commitStagedCapture(wgta);
-                        }
-                    }
-                    else if (action instanceof WaitForHealthAction) {
-                        WaitForHealthAction wh = (WaitForHealthAction) action;
-                        setCurrentStatus(wh.waitingStatusText());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wh, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForHealth(
-                                    wh.healthThreshold, wh.below);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForBlockAction) {
-                        WaitForBlockAction wba = (WaitForBlockAction) action;
-                        setCurrentStatus(wba.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wba, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForBlock(wba);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForGuiAction) {
-                        WaitForGuiAction wga = (WaitForGuiAction) action;
-                        if (!MacroPrearm.hasPrearmedWait(wga)) MacroPrearm.clearCaptureOutputs(wga);
-                        if (MacroPrearm.waitForPrearmed(wga, 0)) {
-                        } else if (wga.waitMode == WaitForGuiAction.WaitMode.CLOSE) {
-                            setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
-                            waitForPredicate(guiClosePredicate(wga, mc), wga.timeoutMs);
-                            MacroPrearm.commitStagedCapture(wga);
-                        } else {
-                            setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
-                            waitForPredicate(() -> {
-                                var captured = wga.captureGui(mc.gui.screen());
-                                captured.ifPresent(values -> MacroPrearm.stageCapture(wga, values));
-                                return captured.isPresent();
-                            }, wga.timeoutMs);
-                            MacroPrearm.commitStagedCapture(wga);
-                        }
-                    }
-                    else if (action instanceof WaitForCooldownAction) {
-                        WaitForCooldownAction wca = (WaitForCooldownAction) action;
-                        ItemTarget cooldownTarget = MacroWorldActions.resolveItemTarget(wca.itemTarget, wca.itemName).resolveTemplate(mc);
-                        if (cooldownTarget == null) continue;
-                        String cooldownLabel = MacroWorldActions.describeItemTarget(cooldownTarget);
-                        setCurrentStatus("Waiting for cooldown: " +
-                            (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wca, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForCooldown(cooldownTarget, wca.checkMainInteractionHand);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitPosAction) {
-                        WaitPosAction wpa = (WaitPosAction) action;
-                        setCurrentStatus("Waiting for Pos: " + String.format("%.0f, %.0f, %.0f", wpa.x, wpa.y, wpa.z));
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wpa, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForPos(
-                                    wpa.x, wpa.y, wpa.z, wpa.leeway, wpa.checkRotation, wpa.yaw, wpa.pitch, wpa.rotLeeway);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof JumpAction) {
-                        JumpAction ja = (JumpAction) action;
-                        mc.execute(() -> ja.execute(mc));
-                        if (ja.tap) {
-                            CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                            waitForCondition(tickFuture);
-                        } else {
-                            for (int t = 0; t < ja.durationTicks && isCurrentRunActive(); t++) {
-                                CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                                waitForCondition(tickFuture);
-                            }
-                        }
-                        mc.execute(() -> ja.release(mc));
-                    }
-                    else if (action instanceof SneakAction) {
-                        SneakAction sna = (SneakAction) action;
-                        if (sna.persistent && sna.sneak) {
-                            currentPersistentActions().removeIf(p -> p instanceof SneakAction);
-                            currentPersistentActions().add(sna);
-                        } else if (!sna.sneak) {
-                            currentPersistentActions().removeIf(p -> p instanceof SneakAction);
-                        }
-                        if (sna.persistent || !sna.sneak) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSneakState(mc), sna.isTickAligned());
-                        else MacroClientThread.postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
-                    }
-                    else if (action instanceof SprintAction) {
-                        SprintAction spa = (SprintAction) action;
-                        if (spa.persistent && spa.sprint) {
-                            currentPersistentActions().removeIf(p -> p instanceof SprintAction);
-                            currentPersistentActions().add(spa);
-                        } else if (!spa.sprint) {
-                            currentPersistentActions().removeIf(p -> p instanceof SprintAction);
-                        }
-                        if (spa.persistent || !spa.sprint) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSprintState(mc), spa.isTickAligned());
-                        else MacroClientThread.postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
-                    }
-                    else if (action instanceof DisconnectAction) {
-                        DisconnectAction da2 = (DisconnectAction) action;
-
-                        broadcastStepProgress(runState, i + 1, macro.actions.size(), macro.name);
-                        if (da2.mode == DisconnectAction.DisconnectMode.DISCONNECT) {
-                            if (da2.delayMs > 0) Thread.sleep(da2.delayMs);
-                            mc.execute(() -> da2.execute(mc));
-                        } else if (da2.mode == DisconnectAction.DisconnectMode.AUTO_DISCONNECT) {
-
-                            setCurrentStatus("Auto Disconnect: waiting for " + da2.trigger.name() + "...");
-                            da2.execute(mc);
-                            setCurrentStatus("Auto Disconnect: executed");
-                        } else if (da2.mode == DisconnectAction.DisconnectMode.KICK_DUPE && da2.useNextAction) {
-
-                            java.util.List<MacroAction> nextActs = new java.util.ArrayList<>();
-                            int lastSkip = -1;
-                            for (int j = i + 1; j < macro.actions.size(); j++) {
-                                MacroAction candidate = macro.actions.get(j);
-
-                                if (candidate instanceof DisconnectAction) break;
-                                if (!candidate.isEnabled()) continue;
-
-                                if (candidate instanceof DelayAction
-                                    || candidate instanceof WaitForHealthAction
-                                    || candidate instanceof WaitForBlockAction
-                                    || candidate instanceof WaitForGuiAction
-                                    || candidate instanceof WaitForCooldownAction
-                                    || candidate instanceof WaitPosAction
-                                    || candidate instanceof WaitMovementAction
-                                    || candidate instanceof WaitForEntityAction
-                                    || candidate instanceof WaitForSoundAction
-                                    || candidate instanceof WaitForSlotChangeAction
-                                    || candidate instanceof WaitForPacketAction
-                                    || candidate instanceof WaitForChatAction
-                                    || candidate instanceof GoToAction) {
-                                    continue;
-                                }
-                                nextActs.add(candidate);
-                                lastSkip = j;
-                            }
-                            da2.setNextActions(nextActs);
-                            mc.execute(() -> da2.execute(mc));
-
-                            if (lastSkip > i) i = lastSkip;
-                        } else {
-
-                            mc.execute(() -> da2.execute(mc));
-                        }
-                        stopCurrentRun();
-                        break;
-                    }
-                    else if (action instanceof RaceAction race) {
-                        int bodyCount = MacroRace.runRaceGroup(mc, module, macro.actions, i, race);
-                        if (bodyCount > 0) i += bodyCount;
-                    }
-                    else if (action instanceof MultiAction multi) {
-                        int stepCount = MacroRace.runMultiGroup(mc, module, macro.name, macro.actions, i, multi);
-                        if (stepCount > 0) i += stepCount;
-                    }
-                    else if (action instanceof ReportAction reportAction) {
-                        int conditionCount = MacroRace.runReportGroup(mc, macro.actions, i, reportAction);
-                        if (conditionCount > 0) i += conditionCount;
-                    }
-                    else if (action instanceof NbtBookAction nba) {
-                        int totalBooks = Math.max(1, nba.bookCount);
-                        long delayMs = Math.max(1, nba.delayTicks) * 50L;
-                        boolean signedAny = false;
-                        for (int b = 0; b < totalBooks; b++) {
-                            if (!isCurrentRunActive()) break;
-                            final int bookIdx = b;
-                            java.util.concurrent.CompletableFuture<Boolean> result = new java.util.concurrent.CompletableFuture<>();
-                            mc.execute(() -> result.complete(nba.executeSingleBook(mc, bookIdx, totalBooks)));
-                            Boolean success = result.get();
-                            if (!success) break;
-                            signedAny = true;
-
-                            if (b < totalBooks - 1) {
-                                Thread.sleep(delayMs);
-                            }
-                        }
-                        if (signedAny && nba.disconnectAfter) {
-                            mc.execute(() -> nba.afterSigning(mc));
-                        }
-                    }
-                    else if (action instanceof GoToAction) {
-                        GoToAction ga = (GoToAction) action;
-                        MacroWorldActions.runGoToAction(mc, ga);
-                    }
-
-                    else if (action instanceof MoveAction) {
-                        MoveAction ma = (MoveAction) action;
-                        if (ma.nonBlocking) {
-
-                            mc.execute(() -> ma.execute(mc));
-                            currentBackgroundMoves().put(ma, new int[]{ma.durationTicks - 1});
-
-                        } else {
-
-                            for (int t = 0; t < ma.durationTicks && isCurrentRunActive(); t++) {
-                                mc.execute(() -> ma.execute(mc));
-                                CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                                waitForCondition(tickFuture);
-                            }
-                            RunState movementRun = CURRENT_RUN.get();
-                            mc.execute(() -> releaseMoveIfUnused(movementRun, ma, mc));
-                        }
-                    }
-                    else if (action instanceof LookAtBlockAction) {
-                        LookAtBlockAction la = (LookAtBlockAction) action;
-                        LookAtBlockAction.RotationTarget rotationTarget = resolveLookAtTargetOnClient(mc, la);
-                        if (rotationTarget == null) {
-                            continue;
-                        }
-                        if (la.smooth) {
-                            startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
-                            if (la.waitForCompletion) {
-                                waitForSmoothRotationCompletion();
-                            }
-                        } else {
-                            mc.execute(() -> {
-                                if (mc.player == null) return;
-                                mc.player.setYRot(rotationTarget.yaw());
-                                mc.player.setXRot(rotationTarget.pitch());
-                            });
-                        }
-                    }
-                    else if (action instanceof RepeatAction) {
-                        RepeatAction ra = (RepeatAction) action;
-                        int startIdx = i + 1;
-                        int endIdx = Math.min(startIdx + ra.stepCount, macro.actions.size());
-
-                        for (int rep = 0; rep < ra.repeatCount && isCurrentRunActive(); rep++) {
-                            setCurrentStatus("Repeat " + (rep + 1) + "/" + ra.repeatCount);
-                            for (int j = startIdx; j < endIdx && isCurrentRunActive(); j++) {
-                                MacroAction subAction = macro.actions.get(j);
-                                if (!subAction.isEnabled()) continue;
-
-                                REPEAT_PACKET_CONTEXT.set(new RepeatPacketContext(macro, j + 1, endIdx));
-                                REPEAT_PACKET_SKIP.set(0);
-                                try {
-                                    executeSingleActionWithWaits(mc, subAction, module);
-                                    j += Math.max(0, REPEAT_PACKET_SKIP.get());
-                                } finally {
-                                    REPEAT_PACKET_SKIP.set(0);
-                                    REPEAT_PACKET_CONTEXT.remove();
-                                }
-                            }
-                        }
-                        i = endIdx - 1;
-                    }
-                    else if (action instanceof CaptureValueAction captureValue) {
-                        MacroCaptureAutofill.runCaptureValueAction(mc, captureValue);
-                    }
-                    else if (action instanceof WaitForChatAction) {
-                        WaitForChatAction wca = (WaitForChatAction) action;
-                        setCurrentStatus("Waiting for chat: " + wca.pattern);
-                        if (!MacroPrearm.waitForPrearmed(wca, wca.timeoutMs)) MacroPacketWait.awaitChat(wca);
-                    }
-                    else if (action instanceof WaitForEntityAction) {
-                        WaitForEntityAction wea = (WaitForEntityAction) action;
-                        setCurrentStatus(wea.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wea, 0)) {
-                                waitForPredicate(() -> wea.matchesEntityTarget(mc), wea.timeoutMs);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForSoundAction) {
-                        WaitForSoundAction wsa = (WaitForSoundAction) action;
-                        String sndDesc = wsa.soundIds.isEmpty() ? "any" : wsa.soundIds.get(0);
-                        setCurrentStatus("Waiting for sound: " + sndDesc);
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wsa, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForSound(wsa);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof MineAction) {
-                        MineAction mna = (MineAction) action;
-                        MacroWorldActions.runMineAction(mc, mna);
-                    }
-                    else if (action instanceof InstaBreakAction) {
-                        MacroBreak.runInstaBreakAction(mc, (InstaBreakAction) action);
-                    }
-                    else if (action instanceof BreakAction breakAction) {
-                        InlineNextActions nextActions = InlineNextActions.empty();
-                        if (breakAction.interact && breakAction.runNextSteps) {
-                            nextActions = collectInlineNextActions(macro.actions, i);
-                            breakAction.setNextActions(nextActions.actions());
-                        }
-                        MacroBreak.runBreakAction(mc, breakAction);
-                        if (breakAction.didRunNextActions() && nextActions.lastIndex() > i) i = nextActions.lastIndex();
-                    }
-
-                    else if (action instanceof WaitForSlotChangeAction) {
-                        WaitForSlotChangeAction wsca = (WaitForSlotChangeAction) action;
-                        setCurrentStatus(wsca.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wsca, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForSlotChange(wsca);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForWorldChangeAction world) {
-                        setCurrentStatus(world.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(world, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForWorldChange(world);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForPositionDeltaAction wpda) {
-                        setCurrentStatus(wpda.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wpda, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForPositionDelta(wpda.distance, wpda.horizontalOnly);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForTeleportAction teleport) {
-                        setCurrentStatus(teleport.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(teleport, 0)) {
-                                CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, teleport);
-                                MacroRace.waitForFutureDone(future, 0);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitGamemodeChangeAction gm) {
-                        setCurrentStatus(gm.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(gm, gm.timeoutMs)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForGamemodeChange(gm);
-                                MacroRace.waitForFutureDone(future, gm.timeoutMs);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitMovementAction wm) {
-                        setCurrentStatus(wm.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wm, 0)) {
-                                CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, wm.resolveSubAction());
-                                MacroRace.waitForFutureDone(future, 0);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForLanStepAction) {
-                        WaitForLanStepAction wla = (WaitForLanStepAction) action;
-                        setCurrentStatus(wla.getDisplayName());
-                        try {
-                            if (!MacroPrearm.waitForPrearmed(wla, 0)) {
-                                CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(wla);
-                                waitForCondition(future);
-                            }
-                        } catch (CancellationException e) {  }
-                    }
-                    else if (action instanceof WaitForMacroStepAction) {
-                        WaitForMacroStepAction wma = (WaitForMacroStepAction) action;
-                        setCurrentStatus(wma.getDisplayName());
-                        if (!MacroPrearm.waitForPrearmed(wma, wma.timeoutMs)) MacroRace.waitForMacroStep(wma);
-                    }
-                    else if (action instanceof StopMacroAction) {
-                        setCurrentStatus("Stopping Macro");
-                        StopMacroAction stopAction = (StopMacroAction) action;
-                        if (stopAction.target != StopMacroAction.StopTarget.SELF) {
-                            stopAction.execute(mc);
-                            break;
-                        }
-
-                        broadcastStepProgress(runState, i + 1, macro.actions.size(), macro.name);
-                        stopCurrentRun();
-                        break;
-                    }
-
-                    else if (action instanceof TickSyncAction) {
-                        TickSyncAction tsa = (TickSyncAction) action;
-
-                        if (mc.level == null) continue;
-
-                        java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            preGeneratePackets(macro, i + 1, tsa.preGenCount);
-
-                        long targetTick = mc.level.getGameTime() + tsa.tickOffset;
-                        setCurrentStatus("Tick Sync -> " + targetTick + " (" + preGenerated.size() + " pkts)");
-
-                        while (isCurrentRunActive() && mc.level.getGameTime() < targetTick) {
-                            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
-                        }
-
-                        if (isCurrentRunActive()) {
-                            executePreGeneratedBurst(mc, preGenerated);
-                            i += countPreGeneratedActions(macro, i + 1, preGenerated.size());
-                            AutismClientMessaging.sendPrefixed("Tick sync: " + preGenerated.size() + " pkts sent");
-                        }
-                    }
-                    else if (action instanceof RevisionSyncAction) {
-                        RevisionSyncAction rsa = (RevisionSyncAction) action;
-
-                        if (mc.player == null || mc.player.containerMenu == null) continue;
-
-                        java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            preGeneratePackets(macro, i + 1, rsa.preGenCount);
-
-                        int baseRevision = mc.player.containerMenu.getStateId();
-                        int targetRevision = baseRevision + rsa.revisionOffset;
-                        setCurrentStatus("Rev Sync -> " + targetRevision + " (" + preGenerated.size() + " pkts)");
-
-                        while (isCurrentRunActive()) {
-                            if (mc.player == null || mc.player.containerMenu == null) break;
-                            if (mc.player.containerMenu.getStateId() >= targetRevision) break;
-                            java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
-                        }
-
-                        if (isCurrentRunActive() && mc.player != null && mc.player.containerMenu != null) {
-                            executePreGeneratedBurst(mc, preGenerated);
-                            i += countPreGeneratedActions(macro, i + 1, preGenerated.size());
-                            AutismClientMessaging.sendPrefixed("Rev sync: " + preGenerated.size() + " pkts sent");
-                        }
-                    }
-                    else if (action instanceof ServerTickSyncAction) {
-                        ServerTickSyncAction stsa = (ServerTickSyncAction) action;
-
-                        if (mc.getConnection() == null) continue;
-
-                        java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            preGeneratePackets(macro, i + 1, stsa.preGenCount);
-
-                        int sampleWaitMs = 0;
-                        while (isCurrentRunActive() && !ServerTickTracker.isReady() && sampleWaitMs < stsa.maxWaitMs) {
-
-                            float progress = ServerTickTracker.getWarmupProgress();
-                            setCurrentStatus(String.format("ServerSync warmup %.0f%% (%d samples, %dms)",
-                                progress * 100, ServerTickTracker.getSampleCount(), ServerTickTracker.getTrackingTimeMs()));
-                            Thread.sleep(50);
-                            sampleWaitMs += 50;
-                        }
-
-                        if (!isCurrentRunActive()) continue;
-
-                        long optimalTime = ServerTickTracker.getOptimalSendTime(stsa.bufferMs, stsa.ignorePing);
-                        long msUntil = (optimalTime - System.nanoTime()) / 1_000_000L;
-                        int ping = ServerTickTracker.getPingMs();
-                        String pingStr = stsa.ignorePing ? " (no ping)" : " ping:" + ping + "ms";
-                        setCurrentStatus("ServerSync in " + Math.max(0, msUntil) + "ms" + pingStr + " (" + preGenerated.size() + " pkts)");
-
-                        long startWait = System.nanoTime();
-                        long maxWaitNanos = stsa.maxWaitMs * 1_000_000L;
-
-                        while (isCurrentRunActive()) {
-                            long now = System.nanoTime();
-                            if ((now - startWait) >= maxWaitNanos) break;
-                            if (now >= optimalTime) break;
-
-                            long remaining = optimalTime - now;
-                            if (remaining > 2_000_000L) {
-                                java.util.concurrent.locks.LockSupport.parkNanos(remaining - 2_000_000L);
-                            } else {
-                                Thread.onSpinWait();
-                            }
-                        }
-
-                        if (isCurrentRunActive()) {
-                            executePreGeneratedBurst(mc, preGenerated);
-                            i += countPreGeneratedActions(macro, i + 1, preGenerated.size());
-                            long actualDelay = (System.nanoTime() - optimalTime) / 1_000_000L;
-                            AutismClientMessaging.sendPrefixed("ServerSync: " + preGenerated.size() + " pkts (+" + actualDelay + "ms)");
-                        }
-                    }
-                    else if (action instanceof RotateAction) {
-                        RotateAction ra = (RotateAction) action;
-                        if (ra.smooth) {
-                            startSmoothRotation(ra.yaw, ra.pitch, ra.getRotationStep());
-                            if (ra.waitForCompletion) {
-                                waitForSmoothRotationCompletion();
-                            }
-                        } else {
-                            mc.execute(() -> action.execute(mc));
-                        }
-                    }
-                    else if (action instanceof PacedTpAction pacedTp) {
-                        runPacedTpAction(mc, pacedTp);
-                    }
-                    else if (action instanceof LookAtBlockAction la) {
-                        LookAtBlockAction.RotationTarget rotationTarget = resolveLookAtTargetOnClient(mc, la);
-                        if (rotationTarget == null) {
-                            continue;
-                        }
-                        if (la.smooth) {
-                            startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
-                            if (la.waitForCompletion) {
-                                waitForSmoothRotationCompletion();
-                            }
-                        } else {
-                            mc.execute(() -> {
-                                if (mc.player == null) return;
-                                mc.player.setYRot(rotationTarget.yaw());
-                                mc.player.setXRot(rotationTarget.pitch());
-                            });
-                        }
-                    }
-                    else if (action instanceof UseItemAction) {
-                        MacroActionRunner.runUseItemAction(mc, (UseItemAction) action);
-                    }
-                    else if (action instanceof ItemAction) {
-                        ItemAction ia = (ItemAction) action;
-                        if (ia.waitForItem) {
-                            try {
-                                MacroWorldActions.waitForItemActionTargets(mc, ia);
-                            } catch (java.util.concurrent.CancellationException e) {  }
-                        }
-                        postGuiFuture = MacroActionRunner.createPostGuiFuture(mc, ia);
-                        if (ia.useClickDelay && ia.clickDelayMs > 0) {
-                            MacroActionRunner.runItemActionPaced(mc, ia);
-                        } else {
-                            MacroActionRunner.runMacroActionOnClientThread(mc, action, "ItemAction");
-                        }
-                    }
-                    else if (action instanceof DropAction || action instanceof SwapSlotsAction) {
-                        if (action instanceof DropAction dropAction) {
-                            postGuiFuture = MacroActionRunner.createPostGuiFuture(mc, dropAction);
-                        }
-                        MacroActionRunner.runMacroActionOnClientThread(mc, action, action.getDisplayName());
-                    }
-                    else if (action instanceof CraftAction craftAction) {
-                        MacroWorldActions.runCraftAction(mc, craftAction);
-                    }
-                    else if (action instanceof SendPacketAction) {
-
-                        if (module != null && module.useInstantExecutionMode()) {
-
-                            try {
-                                action.execute(mc);
-                            } catch (Exception e) {
-                                AutismClientMessaging.sendPrefixed("\u00a7cError in SendPacket: " + e.getMessage());
-                            }
-                        } else {
-                            MacroClientThread.runOnClientThread(mc, () -> {
-                                try {
-                                    action.execute(mc);
-                                } catch (Exception e) {
-                                    AutismClientMessaging.sendPrefixed("\u00a7cError in SendPacket: " + e.getMessage());
-                                }
-                            });
-                        }
-                    }
-                    else if (action instanceof autismclient.util.macro.StoreItemAction) {
-                        autismclient.util.macro.StoreItemAction sia = (autismclient.util.macro.StoreItemAction) action;
-                        setCurrentStatus((sia.mode == autismclient.util.macro.StoreItemAction.Mode.LOOT ? "Looting" : "Storing")
-                            + (sia.persistent ? " \u221e" : ""));
-                        if (sia.persistent) {
-
-                            while (isCurrentRunActive()) {
-                                try { MacroActionRunner.runStoreItemAction(mc, sia); }
-                                catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
-                                catch (Exception e) { AutismClientMessaging.sendPrefixed("Store error: " + e.getMessage()); }
-
-                                CompletableFuture<Void> siTick = MacroConditionRegistry.waitForNextTick();
-                                waitForCondition(siTick);
-                            }
-                        } else {
-                            try { MacroActionRunner.runStoreItemAction(mc, sia); }
-                            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                            catch (Exception e) { AutismClientMessaging.sendPrefixed("Store error: " + e.getMessage()); }
-                        }
-                    }
-                    else if (action instanceof ClickAction) {
-                        ClickAction ca = (ClickAction) action;
-                        MacroActionRunner.runClickActionBurst(mc, ca);
-                    }
-                    else if (action instanceof PayAction) {
-                        MacroWorldActions.runPayAction(mc, (PayAction) action);
-                    }
-                    else if (action instanceof XCarryAction xsa) {
-                        if (xsa.mode == XCarryAction.Mode.PUT_IN
-                                && (xsa.transferMode == XCarryAction.TransferMode.CLICK
-                                    || xsa.transferMode == XCarryAction.TransferMode.SAFE_CLICK)) {
-                            if (xsa.transferMode == XCarryAction.TransferMode.SAFE_CLICK) {
-                                setCurrentStatus("XCarry Safe");
-                                MacroXCarry.runXCarrySafeClickPutIn(mc, xsa);
-                            } else {
-                                setCurrentStatus("XCarry Click");
-                                MacroXCarry.runXCarryClickPutIn(mc, xsa);
-                            }
-                        } else {
-                            setCurrentStatus(switch (xsa.mode) {
-                                case PUT_IN -> "XCarry";
-                                case TAKE_OUT -> "XCarry Out";
-                                case DROP -> "XCarry Drop";
-                            });
-                            MacroClientThread.runOnClientThread(mc, () -> {
-                                try {
-                                    xsa.execute(mc);
-                                } catch (Exception e) {
-                                    AutismClientMessaging.sendPrefixed("\u00a7cXCarry: " + e.getMessage());
-                                }
-                            });
-                        }
-                    }
-                    else if (action instanceof InventoryAuditAction auditAction
-                            && (auditAction.mode == InventoryAuditAction.Mode.DUPE
-                                || auditAction.mode == InventoryAuditAction.Mode.DUPE_SPAM)) {
-                        setCurrentStatus("Dupe: " + auditAction.dupeVector.name() + " " + auditAction.openMode.name());
-                        try {
-                            auditAction.executeDupe(mc);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        } catch (Exception e) {
-                            AutismClientMessaging.sendPrefixed("\u00a7cDupe error: " + e.getMessage());
-                        }
-                    }
-                    else if (action instanceof ContainerClickSequenceAction sequence) {
-                        MacroActionRunner.runContainerClickSequenceAction(mc, sequence);
-                    }
-                    else if (action instanceof PacketBurstAction burst) {
-                        MacroActionRunner.runPacketBurstAction(mc, burst);
-                    }
-                    else if (action instanceof BundleDupeV2Action bundleV2) {
-                        setCurrentStatus("Bundle Dupe V2");
-                        bundleV2.execute(mc);
-                    }
-                    else if (action instanceof RollbackAction rollback) {
-                        setCurrentStatus("Rollback");
-                        try {
-                            rollback.executeRollback(mc);
-                        } catch (InterruptedException e) {
-                            AutismClientMessaging.sendPrefixed("\u00a7eRollback canceled safely.");
-                        } catch (Exception e) {
-                            AutismClientMessaging.sendPrefixed("\u00a7cRollback failed: " + MacroRace.safeThrowableMessage(e));
-                        }
-                    }
-                    else if (action instanceof PacketGateAction pga) {
-                        MacroRace.runPacketGateAction(mc, pga);
-                    }
-                    else if (MacroActionRunner.isTargetWaitInteractionAction(action)) {
-                        postGuiFuture = MacroActionRunner.runTargetWaitInteractionAction(mc, action);
-                    }
-                    else if (action instanceof MacroVariablesAction || action instanceof AssertAction) {
-                        action.execute(mc);
-                    }
-                    else if (action instanceof UseItemPhaseAction phaseAction) {
-                        MacroActionRunner.runUseItemPhaseAction(mc, phaseAction);
-                    }
-                    else if (action instanceof autismclient.api.macro.ContextMacroAction contextAction) {
-                        MacroActionRunner.runContextMacroAction(contextAction);
-                    }
-                    else if (action instanceof PlaceAction placeInteract && placeInteract.interact) {
-
-                        MacroWorldActions.runPlaceAction(mc, placeInteract);
-                    }
-                    else if (action instanceof PlaceAction place && place.waitForItem) {
-
-                        ItemTarget placeTarget = place.resolvedItemTarget().resolveTemplate(mc);
-                        if (placeTarget == null) {
-                            postGuiFuture = null;
-                        } else {
-                        if (placeTarget.hasIdentity() || placeTarget.hasSlot()) {
-                            setCurrentStatus("Waiting for " + MacroWorldActions.describeItemTarget(placeTarget));
-                            try {
-                                MacroWorldActions.waitForItemActionEntry(mc, placeTarget);
-                            } catch (java.util.concurrent.CancellationException e) {  }
-                        }
-                        if (isCurrentRunActive()) {
-                            final PlaceAction fPlace = place;
-                            MacroClientThread.postOnClientThread(mc, () -> {
-                                if (PackHideState.isHardLocked()) return;
-                                try {
-                                    fPlace.execute(mc);
-                                } catch (Exception e) {
-                                    AutismClientMessaging.sendPrefixed("\u00a7cError in Place: " + e.getMessage());
-                                }
-                            }, fPlace.isTickAligned());
-                        }
-                        }
-                    }
-                    else {
-
-                        if (MacroActionRunner.usesTickAlignedDispatch(action)) {
-
-                            MacroActionRunner.runMacroActionOnClientThread(mc, action, action.getDisplayName());
-                        } else if (module != null && module.useInstantExecutionMode()) {
-
-                            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-                            RunState scheduledRun = CURRENT_RUN.get();
-                            mc.execute(() -> withRunContext(scheduledRun, () -> {
-                                try {
-                                    if (PackHideState.isHardLocked()) return;
-                                    action.execute(mc);
-                                } catch (Exception e) {
-                                    AutismClientMessaging.sendPrefixed("\u00a7cError in action: " + e.getMessage());
-                                } finally {
-                                    latch.countDown();
-                                }
-                            }));
-
-                            try {
-                                latch.await(100, TimeUnit.MILLISECONDS);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            }
-                        } else {
-                            MacroActionRunner.runMacroActionOnClientThread(mc, action, action.getDisplayName());
-                        }
-                    }
-
-                    MacroPrearm.commitConditionOutput(action, mc);
-
-                    if (postGuiFuture != null && isCurrentRunActive()) {
-                        try {
-                            waitForCondition(postGuiFuture);
-                        } catch (java.util.concurrent.CancellationException e) {  }
-                    }
-
-                    if (isCurrentRunActive()) {
-                        markStepCompleted(i + 1);
-                        broadcastStepProgress(runState, i + 1, macro.actions.size(), macro.name);
-                    }
-
-                    if (isCurrentRunActive() && !MacroActionRunner.isInstantInventoryAction(action)) {
-                        if (module != null && module.useInstantExecutionMode()) {
-                            int delayUs = module.getActionDelayUs();
-                            if (delayUs > 0) {
-
-                                java.util.concurrent.locks.LockSupport.parkNanos(delayUs * 1000L);
-                            } else {
-
-                                Thread.onSpinWait();
-                            }
-                            yieldToMainThread(mc);
-                        }
-                    }
-                    } finally {
-                        MacroRaycastAim.release();
-                        releaseClientResources(heldResources);
-                    }
-                }
-
-                if (macro.actions.isEmpty()) {
-                    if (!runState.options.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7cMacro stopped: no actions left.");
-                    stopCurrentRun();
-                    break;
-                }
-
-                if (isCurrentRunActive()) {
-                    PacketGateManager.clearOwnerAndFlushConfigured(runState.id, mc == null ? null : mc.getConnection());
-                }
-
-                if (macro.loop && loopCount < maxLoops - 1 && isCurrentRunActive()) {
-                    if (module != null && module.useInstantExecutionMode()) {
-
-                        int delayUs = module.getActionDelayUs();
-                        if (delayUs > 0) {
-                            java.util.concurrent.locks.LockSupport.parkNanos(delayUs * 1000L);
-                        } else {
-                            Thread.onSpinWait();
-                        }
-                        yieldToMainThread(mc);
-                    } else if (module != null && module.useMsSleepMode()) {
-
-                        int sleepMs = module.getMsSleepInterval();
-                        Thread.sleep(sleepMs);
-                    } else {
-
-                        try {
-                            CompletableFuture<Void> syncFuture = MacroConditionRegistry.waitForNextTick();
-                            waitForCondition(syncFuture);
-                        } catch (CancellationException e) {  }
-                    }
-                }
-
-                loopCount++;
-            }
-
-            awaitBackgroundTimedOverrides(runState);
-
-            if (isCurrentRunActive()) {
-                if (!runState.options.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7aMacro finished: " + macro.name);
-            }
-
-        } catch (InterruptedException e) {  } catch (Exception e) {
-            if (!runState.options.silentLifecycle()) AutismClientMessaging.sendPrefixed("\u00a7cMacro crashed: " + e.getMessage());
-            AutismClientAddon.LOG.warn("[Autism] Macro crashed: {}", macro.name, e);
-        } finally {
-            if (!PackHideState.isHardLocked()) {
-                MacroRace.runFinallyActions(runState, mc);
-            }
-            PacketGateManager.clearOwnerAndFlushConfigured(runState.id, mc == null ? null : mc.getConnection());
-            finishCurrentRun();
-            cancelRotation(runState);
-            if (!isRunning.get()) MacroConditionRegistry.cancelAll();
-
-            broadcastStepProgress(runState, -1, 0, "");
-        }
-    }
-
-    static CaptureListSelector.State captureSelectionState(MacroAction action) {
-        return MacroPacketWait.captureSelectionState(action);
-    }
-
-
-    static String buildAutofillQuery(String resolvedCommand, CaptureListSelector.Filter filter, String filterText) {
-        return MacroCaptureAutofill.buildAutofillQuery(resolvedCommand, filter, filterText);
-    }
-
-
-    static void waitForCondition(CompletableFuture<Void> future) {
-
-        Thread t = Thread.currentThread();
-        future.whenComplete((v, e) -> java.util.concurrent.locks.LockSupport.unpark(t));
-        while (!future.isDone() && isCurrentRunActive()) {
-
-            java.util.concurrent.locks.LockSupport.parkNanos(MACRO_WAIT_POLL_NANOS);
-            if (Thread.interrupted()) break;
-        }
-        if (!isCurrentRunActive()) {
-            future.cancel(true);
-        }
-    }
-
-    private static void runPacedTpAction(Minecraft mc, PacedTpAction action) throws InterruptedException {
-        AtomicReference<autismclient.util.multi.PacketTeleportController.MacroHandle> handleRef = new AtomicReference<>();
-        MacroClientThread.runOnClientThread(mc, () -> handleRef.set(
-            autismclient.util.multi.PacketTeleportController.startMacro(action)));
-        autismclient.util.multi.PacketTeleportController.MacroHandle handle = handleRef.get();
-        if (handle == null) return;
-        setCurrentStatus("TP " + action.commandArguments());
-        try {
-            while (isCurrentRunActive() && !handle.completion().isDone()) waitOneTick();
-        } finally {
-            if (!handle.completion().isDone()) {
-                mc.execute(() -> autismclient.util.multi.PacketTeleportController.cancelMacro(handle, "macro stopped"));
-            }
-        }
-    }
-
-    private static final int MAIN_BARRIER_EVERY = 256;
-    private static final ThreadLocal<CompletableFuture<Void>> MAIN_DRAIN_BARRIER = new ThreadLocal<>();
-    private static final ThreadLocal<int[]> INSTANT_BURST = ThreadLocal.withInitial(() -> new int[1]);
-
-    private static void yieldToMainThread(Minecraft mc) {
-        if (mc == null || mc.isSameThread()) return;
-        int[] burst = INSTANT_BURST.get();
-        if (++burst[0] < MAIN_BARRIER_EVERY) return;
-        burst[0] = 0;
-        CompletableFuture<Void> prev = MAIN_DRAIN_BARRIER.get();
-        if (prev != null && !prev.isDone()) waitForCondition(prev);
-        if (!isCurrentRunActive()) return;
-        CompletableFuture<Void> next = new CompletableFuture<>();
-        MAIN_DRAIN_BARRIER.set(next);
-        try {
-            mc.execute(() -> next.complete(null));
-        } catch (Throwable ignored) {
-            next.complete(null);
-        }
-    }
-
-    static void waitForPredicate(java.util.function.BooleanSupplier predicate, int timeoutMs) {
-        long start = System.currentTimeMillis();
-        while (isCurrentRunActive()) {
-            try {
-                if (predicate.getAsBoolean()) return;
-            } catch (Throwable ignored) {  }
-            if (timeoutMs > 0 && System.currentTimeMillis() - start >= timeoutMs) return;
-            CompletableFuture<Void> tick = MacroConditionRegistry.waitForNextTick();
-            waitForCondition(tick);
-        }
-    }
-
-    static java.util.function.BooleanSupplier guiClosePredicate(WaitForGuiAction action, Minecraft mc) {
-        AtomicBoolean sawMatchingGui = new AtomicBoolean(action.checkGui(mc));
-        return () -> {
-            var capture = mc == null ? java.util.Optional.<java.util.Map<String, MacroValue>>empty() : action.captureGui(mc.gui.screen());
-            boolean matches = capture.isPresent();
-            if (matches) {
-                capture.ifPresent(values -> MacroPrearm.stageCapture(action, values));
-                sawMatchingGui.set(true);
-                return false;
-            }
-            return sawMatchingGui.get();
-        };
-    }
-
-    static java.util.function.BooleanSupplier guiClosePredicate(WaitGuiTypeAction action, Minecraft mc) {
-        AtomicBoolean sawMatchingGui = new AtomicBoolean(action.matches(mc));
-        return () -> {
-            var capture = action.capture(mc);
-            boolean matches = capture.isPresent();
-            if (matches) {
-                capture.ifPresent(values -> MacroPrearm.stageCapture(action, values));
-                sawMatchingGui.set(true);
-                return false;
-            }
-            return sawMatchingGui.get();
-        };
-    }
 
 
 
@@ -2119,6 +872,14 @@ public class MacroExecutor {
         return MacroRace.waitForMacroCondition(mc, trigger, timeoutMs);
     }
 
+
+    static CaptureListSelector.State captureSelectionState(MacroAction action) {
+        return MacroPacketWait.captureSelectionState(action);
+    }
+
+    static String buildAutofillQuery(String resolvedCommand, CaptureListSelector.Filter filter, String filterText) {
+        return MacroCaptureAutofill.buildAutofillQuery(resolvedCommand, filter, filterText);
+    }
 
     static void executeSingleActionWithWaits(Minecraft mc, MacroAction action, AutismModule module) throws InterruptedException {
         if (!MacroDynamicBindings.apply(action, mc)) return;
@@ -2137,7 +898,7 @@ public class MacroExecutor {
             if (da.useTicks) {
                 for (int t = 0; t < da.delayTicks && isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tf = MacroConditionRegistry.waitForNextTick();
-                    waitForCondition(tf);
+                    MacroRunLoop.waitForCondition(tf);
                 }
             } else {
                 Thread.sleep(da.delayMs);
@@ -2168,22 +929,22 @@ public class MacroExecutor {
             MacroPrearm.waitForPacketMatch(wpma);
         } else if (action instanceof WaitInventoryPredicateAction wipa) {
             setCurrentStatus(wipa.getDisplayName());
-            waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
+            MacroRunLoop.waitForPredicate(() -> wipa.matches(mc), wipa.timeoutMs);
         } else if (action instanceof WaitDurabilityAction wda) {
             setCurrentStatus(wda.getDisplayName());
             if (wda.useNext) MacroDurability.waitForDurabilityUseNext(mc, wda);
-            else waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
+            else MacroRunLoop.waitForPredicate(() -> wda.matches(mc), wda.timeoutMs);
         } else if (action instanceof WaitFreeSlotsAction wfsa) {
             setCurrentStatus(wfsa.getDisplayName());
-            waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
+            MacroRunLoop.waitForPredicate(() -> wfsa.matches(mc), wfsa.timeoutMs);
         } else if (action instanceof WaitEntityTargetAction weta) {
             setCurrentStatus(weta.getDisplayName());
-            waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
+            MacroRunLoop.waitForPredicate(() -> weta.matches(mc), weta.timeoutMs);
         } else if (action instanceof WaitGuiTypeAction wgta) {
             setCurrentStatus(wgta.getDisplayName());
             MacroPrearm.clearCaptureOutputs(wgta);
-            if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) waitForPredicate(guiClosePredicate(wgta, mc), wgta.timeoutMs);
-            else waitForPredicate(() -> {
+            if (wgta.waitMode == WaitGuiTypeAction.WaitMode.CLOSE) MacroRunLoop.waitForPredicate(MacroRunLoop.guiClosePredicate(wgta, mc), wgta.timeoutMs);
+            else MacroRunLoop.waitForPredicate(() -> {
                 var captured = wgta.capture(mc);
                 captured.ifPresent(values -> MacroPrearm.stageCapture(wgta, values));
                 return captured.isPresent();
@@ -2198,24 +959,24 @@ public class MacroExecutor {
             setCurrentStatus(wh.waitingStatusText());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForHealth(wh.healthThreshold, wh.below);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForBlockAction) {
             WaitForBlockAction wba = (WaitForBlockAction) action;
             setCurrentStatus(wba.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForBlock(wba);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForGuiAction) {
             WaitForGuiAction wga = (WaitForGuiAction) action;
             MacroPrearm.clearCaptureOutputs(wga);
             if (wga.waitMode == WaitForGuiAction.WaitMode.CLOSE) {
                 setCurrentStatus("Waiting for GUI close: " + wga.guiTitle);
-                waitForPredicate(guiClosePredicate(wga, mc), wga.timeoutMs);
+                MacroRunLoop.waitForPredicate(MacroRunLoop.guiClosePredicate(wga, mc), wga.timeoutMs);
             } else {
                 setCurrentStatus("Waiting for GUI: " + wga.guiTitle);
-                waitForPredicate(() -> {
+                MacroRunLoop.waitForPredicate(() -> {
                     var captured = wga.captureGui(mc.gui.screen());
                     captured.ifPresent(values -> MacroPrearm.stageCapture(wga, values));
                     return captured.isPresent();
@@ -2231,7 +992,7 @@ public class MacroExecutor {
                 (!cooldownLabel.isEmpty() ? cooldownLabel : (wca.checkMainInteractionHand ? "Main Hand" : "Off Hand")));
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForCooldown(cooldownTarget, wca.checkMainInteractionHand);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitPosAction) {
             WaitPosAction wpa = (WaitPosAction) action;
@@ -2239,7 +1000,7 @@ public class MacroExecutor {
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPos(
                     wpa.x, wpa.y, wpa.z, wpa.leeway, wpa.checkRotation, wpa.yaw, wpa.pitch, wpa.rotLeeway);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof CaptureValueAction captureValue) {
             MacroCaptureAutofill.runCaptureValueAction(mc, captureValue);
@@ -2251,7 +1012,7 @@ public class MacroExecutor {
             WaitForEntityAction wea = (WaitForEntityAction) action;
             setCurrentStatus(wea.getDisplayName());
             try {
-                waitForPredicate(() -> wea.matchesEntityTarget(mc), wea.timeoutMs);
+                MacroRunLoop.waitForPredicate(() -> wea.matchesEntityTarget(mc), wea.timeoutMs);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForSoundAction) {
             WaitForSoundAction wsa = (WaitForSoundAction) action;
@@ -2259,14 +1020,14 @@ public class MacroExecutor {
             setCurrentStatus("Waiting for sound: " + sndDesc);
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSound(wsa);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForSlotChangeAction) {
             WaitForSlotChangeAction wsca = (WaitForSlotChangeAction) action;
             setCurrentStatus(wsca.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForSlotChange(wsca);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForWorldChangeAction world) {
             setCurrentStatus(world.getDisplayName());
@@ -2278,7 +1039,7 @@ public class MacroExecutor {
             setCurrentStatus(wpda.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForPositionDelta(wpda.distance, wpda.horizontalOnly);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForTeleportAction teleport) {
             setCurrentStatus(teleport.getDisplayName());
@@ -2303,7 +1064,7 @@ public class MacroExecutor {
             setCurrentStatus(wla.getDisplayName());
             try {
                 CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(wla);
-                waitForCondition(future);
+                MacroRunLoop.waitForCondition(future);
             } catch (CancellationException e) {  }
         } else if (action instanceof WaitForMacroStepAction) {
             WaitForMacroStepAction wma = (WaitForMacroStepAction) action;
@@ -2321,7 +1082,7 @@ public class MacroExecutor {
                 for (int t = 0; t < ma.durationTicks && isCurrentRunActive(); t++) {
                     mc.execute(() -> ma.execute(mc));
                     CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                    waitForCondition(tickFuture);
+                    MacroRunLoop.waitForCondition(tickFuture);
                 }
                 RunState movementRun = CURRENT_RUN.get();
                 mc.execute(() -> releaseMoveIfUnused(movementRun, ma, mc));
@@ -2370,11 +1131,11 @@ public class MacroExecutor {
             mc.execute(() -> ja.execute(mc));
             if (ja.tap) {
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                waitForCondition(tickFuture);
+                MacroRunLoop.waitForCondition(tickFuture);
             } else {
                 for (int t = 0; t < ja.durationTicks && isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                    waitForCondition(tickFuture);
+                    MacroRunLoop.waitForCondition(tickFuture);
                 }
             }
             mc.execute(() -> ja.release(mc));
@@ -2493,7 +1254,7 @@ public class MacroExecutor {
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                     catch (Exception e) { AutismClientMessaging.sendPrefixed("Store error: " + e.getMessage()); }
                     CompletableFuture<Void> siTick = MacroConditionRegistry.waitForNextTick();
-                    waitForCondition(siTick);
+                    MacroRunLoop.waitForCondition(siTick);
                 }
             } else {
                 try { MacroActionRunner.runStoreItemAction(mc, sia); }
@@ -2638,7 +1399,7 @@ public class MacroExecutor {
 
         if (postGuiFuture != null && isCurrentRunActive()) {
             try {
-                waitForCondition(postGuiFuture);
+                MacroRunLoop.waitForCondition(postGuiFuture);
             } catch (java.util.concurrent.CancellationException e) {  }
         }
 
@@ -2657,7 +1418,7 @@ public class MacroExecutor {
 
     static void waitOneTick() {
         CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-        waitForCondition(tickFuture);
+        MacroRunLoop.waitForCondition(tickFuture);
     }
 
 
@@ -3214,7 +1975,7 @@ public class MacroExecutor {
         return isRotating.get();
     }
 
-    private static void startSmoothRotation(float yaw, float pitch, double speed) {
+    static void startSmoothRotation(float yaw, float pitch, double speed) {
         RunState run = CURRENT_RUN.get();
         while (run != null && run.running.get()) {
             synchronized (ROTATION_STATE_LOCK) {
@@ -3243,7 +2004,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void waitForSmoothRotationCompletion() {
+    static void waitForSmoothRotationCompletion() {
         RunState run = CURRENT_RUN.get();
         while (isCurrentRunActive() && isRotating.get()
             && (run == null || ROTATION_OWNER.get() == run)) {
@@ -3251,7 +2012,7 @@ public class MacroExecutor {
         }
     }
 
-    private static void cancelRotation(RunState run) {
+    static void cancelRotation(RunState run) {
         if (run == null) return;
         synchronized (ROTATION_STATE_LOCK) {
             if (ROTATION_OWNER.get() != run) return;
@@ -3261,7 +2022,7 @@ public class MacroExecutor {
         }
     }
 
-    private static LookAtBlockAction.RotationTarget resolveLookAtTargetOnClient(Minecraft mc, LookAtBlockAction action) {
+    static LookAtBlockAction.RotationTarget resolveLookAtTargetOnClient(Minecraft mc, LookAtBlockAction action) {
         if (mc == null || action == null) return null;
         java.util.concurrent.atomic.AtomicReference<LookAtBlockAction.RotationTarget> targetRef = new java.util.concurrent.atomic.AtomicReference<>();
         java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
@@ -3289,7 +2050,7 @@ public class MacroExecutor {
         stop();
     }
 
-    private static void executeBurstPackets(Minecraft mc, java.util.List<SendPacketAction> batch) {
+    static void executeBurstPackets(Minecraft mc, java.util.List<SendPacketAction> batch) {
         if (mc.getConnection() == null) {
             AutismClientMessaging.sendPrefixed("\u00a7cNo network connection for burst!");
             return;
@@ -3362,7 +2123,7 @@ public class MacroExecutor {
         return result;
     }
 
-    private static void executePreGeneratedBurst(Minecraft mc, java.util.List<Packet<?>> packets) {
+    static void executePreGeneratedBurst(Minecraft mc, java.util.List<Packet<?>> packets) {
         if (packets.isEmpty() || mc.getConnection() == null) return;
 
         net.minecraft.client.multiplayer.ClientPacketListener handler = mc.getConnection();
@@ -3392,11 +2153,11 @@ public class MacroExecutor {
         }
     }
 
-    private static int countPreGeneratedActions(AutismMacro macro, int startIdx, int packetCount) {
+    static int countPreGeneratedActions(AutismMacro macro, int startIdx, int packetCount) {
         return countPreGeneratedActions(macro, startIdx, packetCount, macro.actions.size());
     }
 
-    private static int countPreGeneratedActions(AutismMacro macro, int startIdx, int packetCount, int endIdx) {
+    static int countPreGeneratedActions(AutismMacro macro, int startIdx, int packetCount, int endIdx) {
         int actionsToSkip = 0;
         int packetsRemaining = packetCount;
 

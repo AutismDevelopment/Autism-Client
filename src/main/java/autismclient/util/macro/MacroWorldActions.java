@@ -136,7 +136,7 @@ final class MacroWorldActions {
         if (resolvedTarget.hasIdentity()) {
             MacroExecutor.setCurrentStatus("Waiting for item in GUI: " + itemLabel);
             CompletableFuture<Void> waitFuture = MacroConditionRegistry.waitForItemInHandler(resolvedTarget);
-            MacroExecutor.waitForCondition(waitFuture);
+            MacroRunLoop.waitForCondition(waitFuture);
         }
     }
 
@@ -216,7 +216,7 @@ final class MacroWorldActions {
             }
             if (MacroExecutor.isCurrentRunActive()) {
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                MacroExecutor.waitForCondition(tickFuture);
+                MacroRunLoop.waitForCondition(tickFuture);
             }
         }
     }
@@ -264,7 +264,7 @@ final class MacroWorldActions {
                 }
 
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                MacroExecutor.waitForCondition(tickFuture);
+                MacroRunLoop.waitForCondition(tickFuture);
             }
         } finally {
             if (!MacroExecutor.isCurrentRunActive()) requestOwnedBaritoneStop(run, mc);
@@ -356,7 +356,7 @@ final class MacroWorldActions {
                 }
 
                 CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-                MacroExecutor.waitForCondition(tickFuture);
+                MacroRunLoop.waitForCondition(tickFuture);
             }
         } finally {
             if (run != null && run.activeMineTracker == mineTracker) run.activeMineTracker = null;
@@ -409,7 +409,7 @@ final class MacroWorldActions {
         long waitStartMs = System.currentTimeMillis();
         while (MacroExecutor.isCurrentRunActive() && AutismCompatManager.isBaritoneBusy() && System.currentTimeMillis() - waitStartMs < 3000L) {
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-            MacroExecutor.waitForCondition(tickFuture);
+            MacroRunLoop.waitForCondition(tickFuture);
         }
     }
 

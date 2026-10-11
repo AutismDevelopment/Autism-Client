@@ -144,7 +144,7 @@ final class MacroActionRunner {
             return true;
         }
         CompletableFuture<Void> future = MacroConditionRegistry.waitForGui(guiName.value());
-        MacroExecutor.waitForCondition(future);
+        MacroRunLoop.waitForCondition(future);
         waitForCurrentGuiReady(mc);
         return true;
     }
@@ -285,17 +285,17 @@ final class MacroActionRunner {
         @Override public void waitTicks(int ticks) {
             MacroExecutor.withRunContext(run, () -> {
                 for (int i = 0; i < ticks && MacroExecutor.isCurrentRunActive(); i++) {
-                    MacroExecutor.waitForCondition(MacroConditionRegistry.waitForNextTick());
+                    MacroRunLoop.waitForCondition(MacroConditionRegistry.waitForNextTick());
                 }
             });
         }
 
         @Override public void awaitCondition(CompletableFuture<Void> future) {
-            if (future != null) MacroExecutor.withRunContext(run, () -> MacroExecutor.waitForCondition(future));
+            if (future != null) MacroExecutor.withRunContext(run, () -> MacroRunLoop.waitForCondition(future));
         }
 
         @Override public void awaitCondition(autismclient.api.macro.AddonCondition condition) {
-            if (condition != null) MacroExecutor.withRunContext(run, () -> MacroExecutor.waitForCondition(MacroConditionRegistry.await(condition)));
+            if (condition != null) MacroExecutor.withRunContext(run, () -> MacroRunLoop.waitForCondition(MacroConditionRegistry.await(condition)));
         }
 
         @Override public boolean isActive() { return run != null && run.running.get() && !PackHideState.isHardLocked(); }
@@ -351,7 +351,7 @@ final class MacroActionRunner {
 
                 for (int t = 0; t < action.holdTicks && MacroExecutor.isCurrentRunActive(); t++) {
                     CompletableFuture<Void> tf = MacroConditionRegistry.waitForNextTick();
-                    MacroExecutor.waitForCondition(tf);
+                    MacroRunLoop.waitForCondition(tf);
                 }
             } finally {
                 if (gateInstalled[0]) {
@@ -420,7 +420,7 @@ final class MacroActionRunner {
     private static void waitTicks(int ticks) {
         for (int i = 0; i < ticks && MacroExecutor.isCurrentRunActive(); i++) {
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-            MacroExecutor.waitForCondition(tickFuture);
+            MacroRunLoop.waitForCondition(tickFuture);
         }
     }
 
@@ -515,7 +515,7 @@ final class MacroActionRunner {
                 return;
             }
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForNextTick();
-            MacroExecutor.waitForCondition(tickFuture);
+            MacroRunLoop.waitForCondition(tickFuture);
         }
     }
 }

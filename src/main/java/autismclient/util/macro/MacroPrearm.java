@@ -136,7 +136,7 @@ final class MacroPrearm {
         if (action instanceof WaitGuiTypeAction guiType) {
             return predicatePrearm(action,
                 guiType.waitMode == WaitGuiTypeAction.WaitMode.CLOSE
-                    ? MacroExecutor.guiClosePredicate(guiType, mc)
+                    ? MacroRunLoop.guiClosePredicate(guiType, mc)
                     : () -> {
                         var capture = guiType.capture(mc);
                         capture.ifPresent(values -> stageCapture(guiType, values));
