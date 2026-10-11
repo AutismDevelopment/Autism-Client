@@ -65,7 +65,7 @@ public final class MacroVariables {
     }
 
     private static MacroVariableContext context() {
-        MacroVariableContext active = MacroExecutor.currentVariableContext();
+        MacroVariableContext active = MacroLifecycle.currentVariableContext();
         return active == null ? FALLBACK.get() : active;
     }
 }
