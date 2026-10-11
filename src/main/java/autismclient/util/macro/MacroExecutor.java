@@ -115,18 +115,19 @@ public class MacroExecutor {
     private static final Object packetWaitLock = new Object();
 
     private static final AtomicBoolean isWaitingForChat = new AtomicBoolean(false);
-    private static final AtomicReference<String> waitingChatPattern = new AtomicReference<>("");
-    private static final AtomicBoolean waitingChatIsRegex = new AtomicBoolean(false);
-    private static final AtomicReference<String> waitingChatPatternJson = new AtomicReference<>("");
-    private static final java.util.concurrent.atomic.AtomicInteger waitingChatFuzzyPercent = new java.util.concurrent.atomic.AtomicInteger(100);
+    static final AtomicReference<String> waitingChatPattern = new AtomicReference<>("");
+    static final AtomicBoolean waitingChatIsRegex = new AtomicBoolean(false);
+    static final AtomicReference<String> waitingChatPatternJson = new AtomicReference<>("");
+    static final java.util.concurrent.atomic.AtomicInteger waitingChatFuzzyPercent = new java.util.concurrent.atomic.AtomicInteger(100);
     private static final AtomicReference<String> lastMatchedChat = new AtomicReference<>("");
-    private static final Object recentChatLock = new Object();
-    private static final Deque<RecentChatMessage> recentChatMessages = new ArrayDeque<>();
-    private static final int MAX_RECENT_CHAT_MESSAGES = 256;
-    private static final Object recentGuiLock = new Object();
-    private static final Deque<RecentGuiTitle> recentGuiTitles = new ArrayDeque<>();
+    static final Object recentChatLock = new Object();
+    static final Deque<RecentChatMessage> recentChatMessages = new ArrayDeque<>();
+    static final int MAX_RECENT_CHAT_MESSAGES = 256;
+    static final Object recentGuiLock = new Object();
+    static final Deque<RecentGuiTitle> recentGuiTitles = new ArrayDeque<>();
     private static final int MAX_RECENT_GUI_TITLES = 128;
-    private static String recentChatServerKey = "";
+    static String recentChatServerKey = "";
+    static volatile String recentChatServerKeyMirror = "";
 
     private static volatile CompletableFuture<Void> activePacketFuture = null;
     private static volatile CompletableFuture<Void> activeChatFuture = null;
@@ -235,7 +236,7 @@ public class MacroExecutor {
         }
     }
 
-    private record ChatCapture(String sender, String message, String displayText, Component displayComponent, ChatSource source) {}
+    record ChatCapture(String sender, String message, String displayText, Component displayComponent, ChatSource source) {}
     private record RepeatPacketContext(AutismMacro macro, int startIdx, int endIdx) {}
     private record InlineNextActions(java.util.List<MacroAction> actions, int lastIndex) {
         static InlineNextActions empty() {
@@ -2165,7 +2166,7 @@ public class MacroExecutor {
         RunState run = CURRENT_RUN.get();
         clearCaptureOutputs(action);
         OneShotPacketListener listener = awaitReceive(packet -> {
-            ChatCapture capture = extractIncomingChat(packet);
+            ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
             if (capture == null) return false;
             RecentChatMessage message = new RecentChatMessage(
                 capture.sender() == null ? "" : capture.sender(),
@@ -3114,8 +3115,8 @@ public class MacroExecutor {
         if (action instanceof WaitForChatAction chat) {
             RunState run = CURRENT_RUN.get();
             OneShotPacketListener listener = awaitReceive(packet -> {
-                ChatCapture capture = extractIncomingChat(packet);
-                var matched = captureChatAction(chat, capture, run == null ? null : run.variables);
+                ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
+                var matched = MacroChatObserve.captureChatAction(chat, capture, run == null ? null : run.variables);
                 if (matched.isEmpty()) return false;
                 if (run != null) run.stagedCaptures.put(chat, matched.get());
                 return true;
@@ -4058,8 +4059,8 @@ public class MacroExecutor {
             java.util.concurrent.atomic.AtomicReference<java.util.Map<String, MacroValue>> captures =
                 new java.util.concurrent.atomic.AtomicReference<>(java.util.Map.of());
             TimedOneShotPacketListener listener = awaitTimedReceive((packet, direction, now) -> {
-                ChatCapture capture = extractIncomingChat(packet);
-                var matched = captureChatAction(chat, capture, context);
+                ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
+                var matched = MacroChatObserve.captureChatAction(chat, capture, context);
                 matched.ifPresent(captures::set);
                 return matched.isPresent();
             });
@@ -4068,7 +4069,7 @@ public class MacroExecutor {
             listener.future.whenComplete((event, e) -> {
                 if (e != null) out.completeExceptionally(e);
                 else out.complete(new MacroEvent(event.packet(), event.direction(), event.nanoTime(),
-                    extractIncomingChat(event.packet()), captures.get()));
+                    MacroChatObserve.extractIncomingChat(event.packet()), captures.get()));
             });
             out.whenComplete((v, e) -> listener.cancel());
             return out;
@@ -4235,8 +4236,8 @@ public class MacroExecutor {
         if (trigger instanceof WaitForChatAction chat) {
             MacroVariableContext context = currentVariableContext();
             OneShotPacketListener listener = awaitReceive(packet -> {
-                ChatCapture capture = extractIncomingChat(packet);
-                return capture != null && captureChatAction(chat, capture, context).isPresent();
+                ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
+                return capture != null && MacroChatObserve.captureChatAction(chat, capture, context).isPresent();
             });
             listener.future.whenComplete((v, e) -> listener.cancel());
             return listener.future;
@@ -7923,7 +7924,7 @@ public class MacroExecutor {
 
     public static void onPacketObserved(Packet<?> packet, String direction) {
         if (PackHideState.isHardLocked()) return;
-        syncRecentChatServerContext();
+        MacroChatObserve.syncRecentChatServerContext();
 
         java.util.List<RunState> runs = activeRunSnapshot();
         boolean s2c = "S2C".equals(direction);
@@ -7939,12 +7940,12 @@ public class MacroExecutor {
         }
 
         if (s2c && (chatWork || isWaitingForChat.get())) {
-            ChatCapture capture = extractIncomingChat(packet);
+            ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
             if (capture != null && capture.message() != null && !capture.message().isBlank()) {
 
                 for (RunState run : runs) {
                     var matched = run.running.get() && run.waitingForChat.get()
-                        ? captureChatAction(run.waitingChatAction, capture, run.variables)
+                        ? MacroChatObserve.captureChatAction(run.waitingChatAction, capture, run.variables)
                         : java.util.Optional.<java.util.Map<String, MacroValue>>empty();
                     if (matched.isPresent()) {
                         run.stagedCaptures.put(run.waitingChatAction, matched.get());
@@ -7952,7 +7953,7 @@ public class MacroExecutor {
                         if (f != null) f.complete(null);
                     }
                 }
-                if (isCurrentRunActive() && isWaitingForChat.get() && matchesWaitingChat(capture)) {
+                if (isCurrentRunActive() && isWaitingForChat.get() && MacroChatObserve.matchesWaitingChat(capture)) {
                     lastMatchedChat.set(capture.displayText());
                     CompletableFuture<Void> f = activeChatFuture;
                     if (f != null) f.complete(null);
@@ -8001,219 +8002,7 @@ public class MacroExecutor {
     }
 
     public static void observeIncomingChat(Packet<?> packet) {
-        if (PackHideState.isHardLocked()) return;
-        ChatCapture capture = extractIncomingChat(packet);
-        if (capture == null || capture.message() == null || capture.message().isBlank()) return;
-        syncRecentChatServerContext();
-        recordRecentChat(capture);
-    }
-
-    private static void recordRecentChat(ChatCapture capture) {
-        RecentChatMessage message = new RecentChatMessage(
-            capture.sender() == null ? "" : capture.sender(),
-            capture.message(),
-            capture.displayText(),
-            capture.displayComponent(),
-            capture.source(),
-            System.currentTimeMillis()
-        );
-        synchronized (recentChatLock) {
-            recentChatMessages.removeIf(existing -> existing.displayText().equals(message.displayText()));
-            recentChatMessages.addFirst(message);
-            while (recentChatMessages.size() > MAX_RECENT_CHAT_MESSAGES) {
-                recentChatMessages.removeLast();
-            }
-        }
-    }
-
-    private static volatile String recentChatServerKeyMirror = "";
-
-    private static void syncRecentChatServerContext() {
-        String currentServerKey = getCurrentMultiplayerServerKey();
-        if (currentServerKey.isEmpty()) return;
-
-        if (currentServerKey.equals(recentChatServerKeyMirror)) return;
-        synchronized (recentChatLock) {
-            if (recentChatServerKey.isEmpty()) {
-                recentChatServerKey = currentServerKey;
-                recentChatServerKeyMirror = currentServerKey;
-                return;
-            }
-            if (!recentChatServerKey.equals(currentServerKey)) {
-                recentChatMessages.clear();
-                recentChatServerKey = currentServerKey;
-                recentChatServerKeyMirror = currentServerKey;
-                synchronized (recentGuiLock) {
-                    recentGuiTitles.clear();
-                }
-            } else {
-                recentChatServerKeyMirror = currentServerKey;
-            }
-        }
-    }
-
-    private static String getCurrentMultiplayerServerKey() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.isLocalServer()) return "";
-
-        ServerData entry = mc.getCurrentServer();
-        if (entry != null && entry.ip != null && !entry.ip.isBlank()) {
-            return normalizeServerKey(entry.ip);
-        }
-
-        if (mc.getConnection() != null && mc.getConnection().getConnection() != null) {
-            SocketAddress address = mc.getConnection().getConnection().getRemoteAddress();
-            if (address instanceof InetSocketAddress inet) {
-                String host = inet.getHostString();
-                if ((host == null || host.isBlank()) && inet.getAddress() != null) {
-                    host = inet.getAddress().getHostAddress();
-                }
-                if (host != null && !host.isBlank()) {
-                    return normalizeServerKey(host + ":" + inet.getPort());
-                }
-            } else if (address != null) {
-                String raw = address.toString();
-                if (raw != null && !raw.isBlank()) {
-                    return normalizeServerKey(raw);
-                }
-            }
-        }
-
-        return "";
-    }
-
-    private static String normalizeServerKey(String address) {
-        if (address == null) return "";
-        String stripped = address.startsWith("/") ? address.substring(1) : address;
-        return stripped.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean matchesWaitingChat(ChatCapture capture) {
-        String patternJson = waitingChatPatternJson.get();
-        if (!waitingChatIsRegex.get() && patternJson != null && !patternJson.isBlank() && capture.displayComponent() != null) {
-            String captureJson = MacroChatText.serializeTextComponent(capture.displayComponent());
-            if (patternJson.equals(captureJson)) return true;
-        }
-        String pattern = MacroChatText.normalizeManualText(waitingChatPattern.get());
-        if (pattern == null || pattern.isBlank()) return true;
-        if (waitingChatIsRegex.get()) {
-            try {
-                java.util.regex.Pattern compiled = MacroCapturePattern.compiled(pattern);
-                return compiled.matcher(capture.message()).matches() || compiled.matcher(capture.displayText()).matches();
-            } catch (Exception ignored) {
-                return false;
-            }
-        }
-        int threshold = waitingChatFuzzyPercent.get();
-        return MacroChatText.fuzzyChatMatch(pattern, capture.message(), threshold)
-            || MacroChatText.fuzzyChatMatch(pattern, capture.displayText(), threshold);
-    }
-
-    private static boolean matchesChatAction(WaitForChatAction action, ChatCapture capture) {
-        return captureChatAction(action, capture, currentVariableContext()).isPresent();
-    }
-
-    private static java.util.Optional<java.util.Map<String, MacroValue>> captureChatAction(WaitForChatAction action, ChatCapture capture) {
-        return captureChatAction(action, capture, currentVariableContext());
-    }
-
-    private static java.util.Optional<java.util.Map<String, MacroValue>> captureChatAction(WaitForChatAction action, ChatCapture capture,
-                                                                                           MacroVariableContext context) {
-        if (action == null || capture == null) return java.util.Optional.empty();
-        MacroCapturePattern.Mode mode = action.effectiveMatchMode();
-        if (mode == MacroCapturePattern.Mode.MATCH && action.patternJson != null && !action.patternJson.isBlank() && capture.displayComponent() != null) {
-            String captureJson = MacroChatText.serializeTextComponent(capture.displayComponent());
-            if (action.patternJson.equals(captureJson)) return java.util.Optional.of(chatValues(action, capture, java.util.Map.of()));
-        }
-        String pattern = MacroChatText.normalizeManualText(action.pattern);
-        if (mode == MacroCapturePattern.Mode.MATCH) {
-            MacroTemplate.Resolution patternResolution = MacroTemplate.resolve(pattern, context, Minecraft.getInstance());
-            if (!patternResolution.success()) return java.util.Optional.empty();
-            pattern = patternResolution.value();
-        }
-        if (pattern == null || pattern.isBlank()) return java.util.Optional.of(chatValues(action, capture, java.util.Map.of()));
-        if (mode != MacroCapturePattern.Mode.MATCH) {
-            var messageResult = MacroCapturePattern.match(mode, pattern, capture.message());
-            var result = messageResult.isPresent() ? messageResult : MacroCapturePattern.match(mode, pattern, capture.displayText());
-            return result.map(value -> chatValues(action, capture, value.values()));
-        }
-        int threshold = WaitForChatAction.clampFuzzyPercent(action.fuzzyPercent);
-        boolean matched = MacroChatText.fuzzyChatMatch(pattern, capture.message(), threshold)
-            || MacroChatText.fuzzyChatMatch(pattern, capture.displayText(), threshold);
-        return matched ? java.util.Optional.of(chatValues(action, capture, java.util.Map.of())) : java.util.Optional.empty();
-    }
-
-    private static java.util.Map<String, MacroValue> chatValues(WaitForChatAction action, ChatCapture capture,
-                                                                  java.util.Map<String, MacroValue> captures) {
-        java.util.Map<String, MacroValue> values = new java.util.LinkedHashMap<>(captures);
-        if (action.saveAs != null && !action.saveAs.isBlank()) {
-            java.util.Map<String, MacroValue> properties = new java.util.LinkedHashMap<>();
-            properties.put("sender", MacroValue.text(capture.sender()));
-            properties.put("message", MacroValue.text(capture.message()));
-            properties.put("display", MacroValue.text(capture.displayText()));
-            properties.put("source", MacroValue.text(capture.source().name()));
-            values.put(action.saveAs, MacroValue.structured(MacroValue.Kind.TEXT, capture.displayText(), properties));
-        }
-        return java.util.Map.copyOf(values);
-    }
-
-    private static ChatCapture extractIncomingChat(Packet<?> packet) {
-
-        if (packet instanceof net.minecraft.network.protocol.game.ClientboundSystemChatPacket systemChat) {
-            Component content = systemChat.content();
-            if (content == null) return null;
-            String raw = content.getString();
-            if (raw == null || raw.isBlank()) return null;
-            return buildChatCapture("", raw, raw, content, ChatSource.PLAYER);
-        }
-
-        if (packet instanceof net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket disguisedChat) {
-            Component content = disguisedChat.message();
-            String text = content == null ? null : content.getString();
-            if (text == null || text.isBlank()) return null;
-            Component decorated = disguisedChat.chatType().decorate(content);
-            String sender = disguisedChat.chatType().name().getString();
-            return buildChatCapture(sender, text, null, decorated, ChatSource.PLAYER);
-        }
-
-        if (packet instanceof net.minecraft.network.protocol.game.ClientboundPlayerChatPacket playerChat) {
-
-            Component content = playerChat.unsignedContent() != null
-                ? playerChat.unsignedContent()
-                : Component.literal(playerChat.body().content());
-            String message = content.getString();
-            if (message == null || message.isBlank()) message = playerChat.body().content();
-            if (message == null || message.isBlank()) return null;
-
-            Component decorated = playerChat.chatType().decorate(content);
-            String sender = playerChat.chatType().name().getString();
-            if (sender == null || sender.isBlank()) {
-                String byUuid = MacroChatText.resolvePlayerName(playerChat.sender());
-                if (byUuid != null && !byUuid.isBlank()) sender = byUuid;
-            }
-            return buildChatCapture(sender, message, null, decorated, ChatSource.PLAYER);
-        }
-
-        return null;
-    }
-
-    private static ChatCapture buildChatCapture(String sender, String message, String displayText, Component displayComponent, ChatSource source) {
-        String cleanMessage = MacroChatText.sanitizeChatText(message);
-        if (cleanMessage.isBlank()) return null;
-        String cleanSender = MacroChatText.sanitizeChatText(sender);
-        String cleanDisplay = MacroChatText.sanitizeChatText(displayText);
-        Component rendered = MacroChatText.literalizeTextComponent(displayComponent);
-        String display = cleanDisplay;
-        if (rendered == null || rendered.getString().isBlank()) {
-            rendered = cleanSender.isBlank()
-                    ? Component.literal(cleanMessage)
-                    : Component.literal("<" + cleanSender + "> ").append(Component.literal(cleanMessage));
-        }
-        if (display == null || display.isBlank()) {
-            display = MacroChatText.sanitizeChatText(rendered.getString());
-        }
-        ChatSource resolvedSource = source != null ? source : ChatSource.PLAYER;
-        return new ChatCapture(cleanSender, cleanMessage, MacroChatText.sanitizeChatText(display), rendered, resolvedSource);
+        MacroChatObserve.observeIncomingChat(packet);
     }
 
     public static String normalizeManualText(String text) {
