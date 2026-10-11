@@ -46,7 +46,7 @@ final class MacroBreak {
                     if (sneakTick != lastSneakTick) {
                         lastSneakTick = sneakTick;
                         final String sneakMode = action.sneakMode;
-                        MacroExecutor.runOnClientThread(mc, () -> holdMacroSneak(mc, sneakMode), action.isTickAligned());
+                        MacroClientThread.runOnClientThread(mc, () -> holdMacroSneak(mc, sneakMode), action.isTickAligned());
                     }
                 }
 
@@ -73,17 +73,17 @@ final class MacroBreak {
                             long ns = t == InteractTiming.CUSTOM
                                 ? Math.abs((long) action.interactCustomMs) * 1_000_000L : 0L;
                             if (interactFirst) {
-                                MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
+                                MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
                                 if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
                                 sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
                             } else if (t == InteractTiming.AFTER_PLUS) {
                                 sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
                                 MacroExecutor.waitOneTick();
-                                MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
+                                MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
                             } else {
                                 sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
                                 if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-                                MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
+                                MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
                             }
                         } else {
                             sendInstaBreakAttempt(mc, target, direction, action.isTickAligned());
@@ -100,7 +100,7 @@ final class MacroBreak {
             if (action.sneak) {
                 final String sneakMode = action.sneakMode;
                 try {
-                    MacroExecutor.runOnClientThread(mc, () -> releaseMacroSneak(mc, sneakMode));
+                    MacroClientThread.runOnClientThread(mc, () -> releaseMacroSneak(mc, sneakMode));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 }
@@ -122,7 +122,7 @@ final class MacroBreak {
 
     private static boolean ensureInstaBreakPickaxe(Minecraft mc, InstaBreakAction action) throws InterruptedException {
 
-        return MacroExecutor.callOnClientThread(mc, () -> {
+        return MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.player == null) return false;
             if (mc.player.getMainHandItem().is(ItemTags.PICKAXES)) return true;
             if (!action.autoPickaxe) return false;
@@ -148,7 +148,7 @@ final class MacroBreak {
     }
 
     private static void sendInstaBreakAttempt(Minecraft mc, BlockPos pos, Direction direction, boolean tickAligned) throws InterruptedException {
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player == null || mc.level == null || mc.gameMode == null || mc.getConnection() == null) return;
             BlockPos blockPos = pos.immutable();
             Direction dir = direction == null ? Direction.UP : direction;
@@ -203,7 +203,7 @@ final class MacroBreak {
                 if (!started[0]) {
                     result = useNextSteps
                         ? startBreakWithNextSteps(mc, action, target, direction, started, nextStepsFired, missingNextStepsWarned)
-                        : MacroExecutor.callOnClientThread(mc, () -> startBreakOnClient(mc, action, target, direction, started), -1, action.isTickAligned());
+                        : MacroClientThread.callOnClientThread(mc, () -> startBreakOnClient(mc, action, target, direction, started), -1, action.isTickAligned());
                 } else if (action.interact && action.interactTiming == InteractTiming.CUSTOM) {
                     result = useNextSteps
                         ? breakCustomTickWithNextSteps(mc, action, target, direction, nextStepsFired, missingNextStepsWarned)
@@ -211,7 +211,7 @@ final class MacroBreak {
                 } else {
                     result = useNextSteps
                         ? breakContinueWithNextSteps(mc, action, target, direction, nextStepsFired, missingNextStepsWarned)
-                        : MacroExecutor.callOnClientThread(mc, () -> breakContinueOnClient(mc, action, target, direction), -1, action.isTickAligned());
+                        : MacroClientThread.callOnClientThread(mc, () -> breakContinueOnClient(mc, action, target, direction), -1, action.isTickAligned());
                 }
 
                 if (result < 0) {
@@ -222,7 +222,7 @@ final class MacroBreak {
                         runBreakNextStepsAfterCompletion(mc, action, nextStepsFired, missingNextStepsWarned);
                     } else if (action.interact && action.interactTiming == InteractTiming.AFTER_PLUS) {
                         MacroExecutor.waitOneTick();
-                        MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
+                        MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, target, direction), action.isTickAligned());
                     }
                     completed++;
                     MacroExecutor.setCurrentStatus("Break " + completed + "/" + (targetTimes == 0 ? "\u221e" : targetTimes));
@@ -237,7 +237,7 @@ final class MacroBreak {
             }
         } finally {
             final boolean wasMining = started[0];
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (wasMining && mc.gameMode != null && mc.gameMode.isDestroying()) mc.gameMode.stopDestroyBlock();
                 if (action.sneak) releaseMacroSneak(mc, action.sneakMode);
             }, action.isTickAligned());
@@ -248,7 +248,7 @@ final class MacroBreak {
     private static int startBreakWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
                                                boolean[] started, boolean[] nextStepsFired,
                                                boolean[] missingNextStepsWarned) throws InterruptedException {
-        MacroExecutor.BreakStartPlan plan = MacroExecutor.callOnClientThread(mc, () -> prepareBreakStartOnClient(mc, action, pos), new MacroExecutor.BreakStartPlan(-1, false, false));
+        MacroExecutor.BreakStartPlan plan = MacroClientThread.callOnClientThread(mc, () -> prepareBreakStartOnClient(mc, action, pos), new MacroExecutor.BreakStartPlan(-1, false, false));
         if (plan.result() != 0) return plan.result();
 
         if (plan.instant() && plan.interactFirst()) {
@@ -256,7 +256,7 @@ final class MacroBreak {
             if (!MacroExecutor.isCurrentRunActive()) return -1;
         }
 
-        int result = MacroExecutor.callOnClientThread(mc, () -> startPreparedBreakOnClient(mc, action, pos, dir, started), -1, action.isTickAligned());
+        int result = MacroClientThread.callOnClientThread(mc, () -> startPreparedBreakOnClient(mc, action, pos, dir, started), -1, action.isTickAligned());
         return result;
     }
 
@@ -320,7 +320,7 @@ final class MacroBreak {
     private static int breakContinueWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
                                                   boolean[] nextStepsFired,
                                                   boolean[] missingNextStepsWarned) throws InterruptedException {
-        MacroExecutor.BreakContinuePlan plan = MacroExecutor.callOnClientThread(mc, () -> inspectBreakContinueOnClient(mc, action, pos), new MacroExecutor.BreakContinuePlan(-1, false, false));
+        MacroExecutor.BreakContinuePlan plan = MacroClientThread.callOnClientThread(mc, () -> inspectBreakContinueOnClient(mc, action, pos), new MacroExecutor.BreakContinuePlan(-1, false, false));
         if (plan.result() != 0) return plan.result();
 
         InteractTiming timing = action.interactTiming;
@@ -333,7 +333,7 @@ final class MacroBreak {
             if (!MacroExecutor.isCurrentRunActive()) return -1;
         }
 
-        int result = MacroExecutor.callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
+        int result = MacroClientThread.callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
         return result;
     }
 
@@ -381,7 +381,7 @@ final class MacroBreak {
     private static int breakCustomTickWithNextSteps(Minecraft mc, BreakAction action, BlockPos pos, Direction dir,
                                                     boolean[] nextStepsFired,
                                                     boolean[] missingNextStepsWarned) throws InterruptedException {
-        boolean willBreak = Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        boolean willBreak = Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.level == null || mc.player == null) return Boolean.FALSE;
             BlockState state = mc.level.getBlockState(pos);
             if (state.isAir()) return Boolean.FALSE;
@@ -389,7 +389,7 @@ final class MacroBreak {
         }, Boolean.FALSE));
 
         if (!willBreak) {
-            return MacroExecutor.callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
+            return MacroClientThread.callOnClientThread(mc, () -> continueBreakOnClient(mc, action, pos, dir), -1, action.isTickAligned());
         }
 
         long ns = Math.abs((long) action.interactCustomMs) * 1_000_000L;
@@ -398,15 +398,15 @@ final class MacroBreak {
             runBreakNextStepsOnce(mc, action, nextStepsFired, missingNextStepsWarned);
             if (!MacroExecutor.isCurrentRunActive()) return -1;
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            broke = MacroExecutor.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
+            broke = MacroClientThread.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
         } else {
-            broke = MacroExecutor.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
+            broke = MacroClientThread.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
         }
         return broke;
     }
 
     private static int breakCustomTick(Minecraft mc, BreakAction action, BlockPos pos, Direction dir) throws InterruptedException {
-        boolean willBreak = Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        boolean willBreak = Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.level == null || mc.player == null) return Boolean.FALSE;
             BlockState s = mc.level.getBlockState(pos);
             if (s.isAir()) return Boolean.FALSE;
@@ -415,7 +415,7 @@ final class MacroBreak {
 
         if (!willBreak) {
 
-            return MacroExecutor.callOnClientThread(mc, () -> {
+            return MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.level == null || mc.gameMode == null || mc.player == null) return -1;
                 if (mc.level.getBlockState(pos).isAir()) return 1;
                 if (action.sneak) holdMacroSneak(mc, action.sneakMode);
@@ -429,14 +429,14 @@ final class MacroBreak {
         int broke;
         if (action.interactCustomMs < 0) {
 
-            MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
+            MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            broke = MacroExecutor.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
+            broke = MacroClientThread.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
         } else {
 
-            broke = MacroExecutor.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
+            broke = MacroClientThread.callOnClientThread(mc, () -> breakAndDetectOnClient(mc, pos, dir), -1, action.isTickAligned());
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            MacroExecutor.runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
+            MacroClientThread.runOnClientThread(mc, () -> sendBlockInteract(mc, pos, dir), action.isTickAligned());
         }
         return broke;
     }

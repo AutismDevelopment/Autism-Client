@@ -238,7 +238,7 @@ final class MacroPrearm {
         if (!(action instanceof MacroCaptureOutput output)) return;
         String name = MacroVariableContext.cleanRootName(output.getSaveAs());
         if (name.isEmpty()) return;
-        MacroValue value = MacroExecutor.callOnClientThread(mc, () -> conditionOutputValue(action, mc), null);
+        MacroValue value = MacroClientThread.callOnClientThread(mc, () -> conditionOutputValue(action, mc), null);
         if (value != null) MacroVariables.setValue(name, value);
     }
 

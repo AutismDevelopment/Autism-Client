@@ -16,7 +16,7 @@ final class MacroDurability {
         AtomicReference<DurabilityUseNextSession> sessionRef = new AtomicReference<>();
         long start = System.currentTimeMillis();
         while (MacroExecutor.isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> tickDurabilityUseNext(mc, action, sessionRef), Boolean.FALSE))) {
+            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> tickDurabilityUseNext(mc, action, sessionRef), Boolean.FALSE))) {
                 return;
             }
             if (action.timeoutMs > 0 && System.currentTimeMillis() - start >= action.timeoutMs) return;

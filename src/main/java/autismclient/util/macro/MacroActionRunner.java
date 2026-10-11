@@ -19,7 +19,7 @@ final class MacroActionRunner {
         if (!(action instanceof RaycastAim aim) || !aim.isRaycast()) return;
         autismclient.util.AutismRotationUtil.Rotation rotation;
         try {
-            rotation = MacroExecutor.callOnClientThread(mc, () -> MacroRaycastAim.aimFor(mc, aim.raycastTarget(mc)), null);
+            rotation = MacroClientThread.callOnClientThread(mc, () -> MacroRaycastAim.aimFor(mc, aim.raycastTarget(mc)), null);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return;
@@ -95,7 +95,7 @@ final class MacroActionRunner {
     }
 
     private static boolean canRunTargetInteractionNow(Minecraft mc, MacroAction action) throws InterruptedException {
-        return MacroExecutor.callOnClientThread(mc, () -> {
+        return MacroClientThread.callOnClientThread(mc, () -> {
             if (action instanceof OpenContainerAction open) return open.canExecuteNow(mc);
             if (action instanceof InteractEntityAction interact) return interact.canExecuteNow(mc);
             return true;
@@ -103,7 +103,7 @@ final class MacroActionRunner {
     }
 
     private static boolean runTargetInteractionAttempt(Minecraft mc, MacroAction action) throws InterruptedException {
-        return MacroExecutor.callOnClientThread(mc, () -> {
+        return MacroClientThread.callOnClientThread(mc, () -> {
             try {
                 if (action instanceof OpenContainerAction open) return open.tryExecute(mc);
                 if (action instanceof InteractEntityAction interact) return interact.tryExecute(mc);
@@ -173,7 +173,7 @@ final class MacroActionRunner {
 
         long deadline = System.nanoTime() + 500_000_000L;
         while (MacroExecutor.isCurrentRunActive()) {
-            Boolean ready = MacroExecutor.callOnClientThread(mc, () -> {
+            Boolean ready = MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.player == null || mc.gui.screen() == null) return false;
                 if (mc.player.containerMenu != null && mc.player.containerMenu != mc.player.inventoryMenu) {
                     return mc.player.containerMenu.getStateId() > 0;
@@ -197,8 +197,8 @@ final class MacroActionRunner {
                         + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage()));
             }
         };
-        if (usesTickAlignedDispatch(action)) MacroExecutor.runOnClientTick(mc, body);
-        else MacroExecutor.runOnClientThread(mc, body);
+        if (usesTickAlignedDispatch(action)) MacroClientThread.runOnClientTick(mc, body);
+        else MacroClientThread.runOnClientThread(mc, body);
     }
 
     public static boolean usesTickAlignedDispatch(MacroAction action) {
@@ -207,7 +207,7 @@ final class MacroActionRunner {
 
     public static void runItemActionPaced(Minecraft mc, ItemAction ia) throws InterruptedException {
         MacroExecutor.setCurrentStatus(ia.getDisplayName());
-        java.util.List<Runnable> plan = MacroExecutor.callOnClientThread(mc, () -> ia.buildClickPlan(mc), java.util.Collections.<Runnable>emptyList());
+        java.util.List<Runnable> plan = MacroClientThread.callOnClientThread(mc, () -> ia.buildClickPlan(mc), java.util.Collections.<Runnable>emptyList());
         if (plan == null || plan.isEmpty()) return;
         long delayMs = Math.max(0, ia.clickDelayMs);
         MacroExecutor.RunState scheduledRun = MacroExecutor.CURRENT_RUN.get();
@@ -264,7 +264,7 @@ final class MacroActionRunner {
                 try { r.run(); }
                 catch (Throwable t) { AutismClientMessaging.sendPrefixed("\u00a7cAddon action (client task) error: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage())); }
             });
-            try { MacroExecutor.runOnClientThread(Minecraft.getInstance(), safe); }
+            try { MacroClientThread.runOnClientThread(Minecraft.getInstance(), safe); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
 
@@ -278,7 +278,7 @@ final class MacroActionRunner {
                 });
                 return value.get();
             };
-            try { return MacroExecutor.callOnClientThread(Minecraft.getInstance(), safe, null); }
+            try { return MacroClientThread.callOnClientThread(Minecraft.getInstance(), safe, null); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); return null; }
         }
 
@@ -335,14 +335,14 @@ final class MacroActionRunner {
         int times = action.repeatTimes();
         for (int i = 0; i < times && MacroExecutor.isCurrentRunActive(); i++) {
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 try { action.sendUsePacket(mc); }
                 catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in Use phase: " + e.getMessage()); }
             });
 
             final boolean[] gateInstalled = { false };
             if (action.shouldGate()) {
-                MacroExecutor.runOnClientThread(mc, () -> {
+                MacroClientThread.runOnClientThread(mc, () -> {
                     try { gateInstalled[0] = action.installGate(mc); }
                     catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in Use gate: " + e.getMessage()); }
                 });
@@ -359,13 +359,13 @@ final class MacroActionRunner {
                     if (wasOnThread) {
                         action.removeGate();
                     } else {
-                        MacroExecutor.runOnClientThread(mc, action::removeGate);
+                        MacroClientThread.runOnClientThread(mc, action::removeGate);
                     }
                 }
             }
             if (!MacroExecutor.isCurrentRunActive()) break;
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 try { action.finishRelease(mc); }
                 catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in Use release: " + e.getMessage()); }
             });
@@ -375,7 +375,7 @@ final class MacroActionRunner {
     public static void runClickActionBurst(Minecraft mc, ClickAction action) throws InterruptedException {
         int times = Math.max(1, action.clickCount);
 
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             for (int c = 0; c < times && MacroExecutor.isCurrentRunActive(); c++) {
                 try {
                     action.execute(mc);
@@ -402,18 +402,18 @@ final class MacroActionRunner {
         if (action == null) return;
         int delayTicks = StoreItemAction.clampDelayTicks(action.delayTicks);
         if (delayTicks <= 0) {
-            MacroExecutor.runOnClientThread(mc, () -> action.doTransfer(mc));
+            MacroClientThread.runOnClientThread(mc, () -> action.doTransfer(mc));
             return;
         }
 
-        List<Integer> slots = MacroExecutor.callOnClientThread(mc, () -> action.collectTransferSlots(mc), List.of());
+        List<Integer> slots = MacroClientThread.callOnClientThread(mc, () -> action.collectTransferSlots(mc), List.of());
         for (int i = 0; i < slots.size() && MacroExecutor.isCurrentRunActive(); i++) {
             AutismInventoryClickHelper.click(mc, slots.get(i), 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE);
             if (i + 1 < slots.size()) waitTicks(delayTicks);
         }
 
         if (action.closeAfter && !action.persistent) {
-            MacroExecutor.runOnClientThread(mc, () -> AutismGuiActions.closeCurrentScreen(mc, action.closeSendPkt, false));
+            MacroClientThread.runOnClientThread(mc, () -> AutismGuiActions.closeCurrentScreen(mc, action.closeSendPkt, false));
         }
     }
 
@@ -430,7 +430,7 @@ final class MacroActionRunner {
         boolean sneaking = action.sneak;
         try {
             if (action.useMode == UseItemAction.UseMode.CUSTOM_HOLD) {
-                MacroExecutor.runOnClientThread(mc, () -> {
+                MacroClientThread.runOnClientThread(mc, () -> {
                     try {
                         if (sneaking) autismclient.util.AutismMacroSneak.forceSneak(mc, true);
                         action.execute(mc);
@@ -440,7 +440,7 @@ final class MacroActionRunner {
                 if (action.holdTicks > 0) {
                     waitTicks(action.holdTicks);
                     if (!MacroExecutor.isCurrentRunActive()) return;
-                    MacroExecutor.runOnClientThread(mc, () -> {
+                    MacroClientThread.runOnClientThread(mc, () -> {
                         try { action.sendRelease(mc); }
                         catch (Exception e) { AutismClientMessaging.sendPrefixed("\u00a7cError in UseItem release: " + e.getMessage()); }
                     }, action.isTickAligned());
@@ -451,7 +451,7 @@ final class MacroActionRunner {
 
             int times = Math.max(1, action.useCount);
             for (int i = 0; i < times && MacroExecutor.isCurrentRunActive(); i++) {
-                MacroExecutor.runOnClientThread(mc, () -> {
+                MacroClientThread.runOnClientThread(mc, () -> {
                     try {
                         if (sneaking) autismclient.util.AutismMacroSneak.forceSneak(mc, true);
                         action.execute(mc);
@@ -476,7 +476,7 @@ final class MacroActionRunner {
         for (int repeat = 0; repeat < repeats && MacroExecutor.isCurrentRunActive(); repeat++) {
             for (int slot : slots) {
                 if (!MacroExecutor.isCurrentRunActive()) return;
-                MacroExecutor.runOnClientThread(mc, () -> action.executeClick(mc, slot));
+                MacroClientThread.runOnClientThread(mc, () -> action.executeClick(mc, slot));
                 sent++;
                 if (delay > 0 && sent < total) waitTicks(delay);
             }
@@ -497,19 +497,19 @@ final class MacroActionRunner {
     private static void waitForUseItemFinish(Minecraft mc, int fallbackTicks) throws InterruptedException {
         if (mc == null || !MacroExecutor.isCurrentRunActive()) return;
 
-        if (!Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc,
+        if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc,
                 () -> mc.player != null && mc.player.isUsingItem(),
                 Boolean.FALSE))) {
             return;
         }
 
-        int remaining = MacroExecutor.callOnClientThread(mc,
+        int remaining = MacroClientThread.callOnClientThread(mc,
                 () -> mc.player == null ? 0 : Math.max(0, mc.player.getUseItemRemainingTicks()),
                 0);
         int maxTicks = Math.max(8, remaining > 0 ? remaining + 8 : fallbackTicks + 8);
         maxTicks = Math.min(maxTicks, 72000);
         for (int i = 0; i < maxTicks && MacroExecutor.isCurrentRunActive(); i++) {
-            if (!Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc,
+            if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc,
                     () -> mc.player != null && mc.player.isUsingItem(),
                     Boolean.FALSE))) {
                 return;

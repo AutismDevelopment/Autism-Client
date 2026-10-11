@@ -340,7 +340,7 @@ final class MacroCaptureAutofill {
         while (MacroExecutor.isCurrentRunActive()) {
             CaptureValueAction.Preview preview;
             try {
-                preview = MacroExecutor.callOnClientThread(mc, () -> action.previewCurrent(mc),
+                preview = MacroClientThread.callOnClientThread(mc, () -> action.previewCurrent(mc),
                     CaptureValueAction.Preview.unavailable("Not available"));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -374,7 +374,7 @@ final class MacroCaptureAutofill {
                 String keySnapshot = trackedKey;
                 int rowSnapshot = trackedRow;
                 String objectiveSnapshot = trackedObjective;
-                line = MacroExecutor.callOnClientThread(mc,
+                line = MacroClientThread.callOnClientThread(mc,
                     () -> action.resolveScoreboardLine(mc, keySnapshot, rowSnapshot, objectiveSnapshot), null);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();

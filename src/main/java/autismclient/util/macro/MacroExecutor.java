@@ -1300,8 +1300,8 @@ public class MacroExecutor {
                         } else if (!sna.sneak) {
                             currentPersistentActions().removeIf(p -> p instanceof SneakAction);
                         }
-                        if (sna.persistent || !sna.sneak) postOnClientThread(mc, () -> applyAggregateSneakState(mc), sna.isTickAligned());
-                        else postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
+                        if (sna.persistent || !sna.sneak) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSneakState(mc), sna.isTickAligned());
+                        else MacroClientThread.postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
                     }
                     else if (action instanceof SprintAction) {
                         SprintAction spa = (SprintAction) action;
@@ -1311,8 +1311,8 @@ public class MacroExecutor {
                         } else if (!spa.sprint) {
                             currentPersistentActions().removeIf(p -> p instanceof SprintAction);
                         }
-                        if (spa.persistent || !spa.sprint) postOnClientThread(mc, () -> applyAggregateSprintState(mc), spa.isTickAligned());
-                        else postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
+                        if (spa.persistent || !spa.sprint) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSprintState(mc), spa.isTickAligned());
+                        else MacroClientThread.postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
                     }
                     else if (action instanceof DisconnectAction) {
                         DisconnectAction da2 = (DisconnectAction) action;
@@ -1754,7 +1754,7 @@ public class MacroExecutor {
                                 AutismClientMessaging.sendPrefixed("\u00a7cError in SendPacket: " + e.getMessage());
                             }
                         } else {
-                            runOnClientThread(mc, () -> {
+                            MacroClientThread.runOnClientThread(mc, () -> {
                                 try {
                                     action.execute(mc);
                                 } catch (Exception e) {
@@ -1807,7 +1807,7 @@ public class MacroExecutor {
                                 case TAKE_OUT -> "XCarry Out";
                                 case DROP -> "XCarry Drop";
                             });
-                            runOnClientThread(mc, () -> {
+                            MacroClientThread.runOnClientThread(mc, () -> {
                                 try {
                                     xsa.execute(mc);
                                 } catch (Exception e) {
@@ -1881,7 +1881,7 @@ public class MacroExecutor {
                         }
                         if (isCurrentRunActive()) {
                             final PlaceAction fPlace = place;
-                            postOnClientThread(mc, () -> {
+                            MacroClientThread.postOnClientThread(mc, () -> {
                                 if (PackHideState.isHardLocked()) return;
                                 try {
                                     fPlace.execute(mc);
@@ -2038,7 +2038,7 @@ public class MacroExecutor {
 
     private static void runPacedTpAction(Minecraft mc, PacedTpAction action) throws InterruptedException {
         AtomicReference<autismclient.util.multi.PacketTeleportController.MacroHandle> handleRef = new AtomicReference<>();
-        runOnClientThread(mc, () -> handleRef.set(
+        MacroClientThread.runOnClientThread(mc, () -> handleRef.set(
             autismclient.util.multi.PacketTeleportController.startMacro(action)));
         autismclient.util.multi.PacketTeleportController.MacroHandle handle = handleRef.get();
         if (handle == null) return;
@@ -2386,8 +2386,8 @@ public class MacroExecutor {
             } else if (!sna.sneak) {
                 currentPersistentActions().removeIf(p -> p instanceof SneakAction);
             }
-            if (sna.persistent || !sna.sneak) postOnClientThread(mc, () -> applyAggregateSneakState(mc), sna.isTickAligned());
-            else postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
+            if (sna.persistent || !sna.sneak) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSneakState(mc), sna.isTickAligned());
+            else MacroClientThread.postOnClientThread(mc, () -> sna.execute(mc), sna.isTickAligned());
         } else if (action instanceof SprintAction) {
             SprintAction spa = (SprintAction) action;
             if (spa.persistent && spa.sprint) {
@@ -2396,8 +2396,8 @@ public class MacroExecutor {
             } else if (!spa.sprint) {
                 currentPersistentActions().removeIf(p -> p instanceof SprintAction);
             }
-            if (spa.persistent || !spa.sprint) postOnClientThread(mc, () -> applyAggregateSprintState(mc), spa.isTickAligned());
-            else postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
+            if (spa.persistent || !spa.sprint) MacroClientThread.postOnClientThread(mc, () -> applyAggregateSprintState(mc), spa.isTickAligned());
+            else MacroClientThread.postOnClientThread(mc, () -> spa.execute(mc), spa.isTickAligned());
         } else if (action instanceof NbtBookAction nba) {
             int totalBooks = Math.max(1, nba.bookCount);
             long delayMs = Math.max(1, nba.delayTicks) * 50L;
@@ -2473,7 +2473,7 @@ public class MacroExecutor {
                     case TAKE_OUT -> "XCarry Out";
                     case DROP -> "XCarry Drop";
                 });
-                runOnClientThread(mc, () -> {
+                MacroClientThread.runOnClientThread(mc, () -> {
                     try {
                         xsa.execute(mc);
                     } catch (Exception e) {
@@ -2661,147 +2661,10 @@ public class MacroExecutor {
     }
 
 
-    static void runOnClientThread(Minecraft mc, Runnable runnable) throws InterruptedException {
-        if (PackHideState.isHardLocked()) return;
-        RunState scheduledRun = CURRENT_RUN.get();
-        Runnable contextual = () -> withRunContext(scheduledRun, runnable);
-        if (mc.isSameThread()) {
-            if (PackHideState.isHardLocked()) return;
-            contextual.run();
-            return;
-        }
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AtomicBoolean pending = new AtomicBoolean(true);
-        mc.execute(() -> {
-            try {
-                if (!pending.compareAndSet(true, false)) return;
-                if (PackHideState.isHardLocked()) return;
-                contextual.run();
-            } finally {
-                latch.countDown();
-            }
-        });
-        if (!latch.await(2000, TimeUnit.MILLISECONDS)) pending.set(false);
-    }
-
-    static void runOnClientThread(Minecraft mc, Runnable runnable, boolean tickAligned) throws InterruptedException {
-        if (tickAligned) runOnClientTick(mc, runnable);
-        else runOnClientThread(mc, runnable);
-    }
-
-    private static void postOnClientThread(Minecraft mc, Runnable runnable, boolean tickAligned) throws InterruptedException {
-        if (tickAligned) {
-            runOnClientTick(mc, runnable);
-            return;
-        }
-        if (PackHideState.isHardLocked()) return;
-        RunState scheduledRun = CURRENT_RUN.get();
-        mc.execute(() -> {
-            if (PackHideState.isHardLocked()) return;
-            withRunContext(scheduledRun, runnable);
-        });
-    }
-
-    static void runOnClientTick(Minecraft mc, Runnable runnable) throws InterruptedException {
-        if (PackHideState.isHardLocked()) return;
-        RunState scheduledRun = CURRENT_RUN.get();
-        Runnable contextual = () -> withRunContext(scheduledRun, runnable);
-
-        if (mc.isSameThread()) {
-            if (PackHideState.isHardLocked()) return;
-            contextual.run();
-            return;
-        }
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AtomicBoolean pending = new AtomicBoolean(true);
-        TICK_ALIGNED.add(() -> {
-            try {
-                if (!pending.compareAndSet(true, false)) return;
-                if (PackHideState.isHardLocked()) return;
-                contextual.run();
-            } finally {
-                latch.countDown();
-            }
-        });
-        if (!latch.await(2000, TimeUnit.MILLISECONDS)) pending.set(false);
-    }
-
-    private static final java.util.concurrent.ConcurrentLinkedQueue<Runnable> TICK_ALIGNED =
-        new java.util.concurrent.ConcurrentLinkedQueue<>();
-
     public static void drainTickAligned() {
-
-        if (autismclient.modules.AutoTotemModule.operationActive()) return;
-        Runnable task;
-        while ((task = TICK_ALIGNED.poll()) != null) {
-            try {
-                task.run();
-            } catch (Throwable t) {
-                AutismClientAddon.LOG.debug("[Autism] Tick-aligned macro task failed", t);
-            }
-        }
+        MacroClientThread.drainTickAligned();
     }
 
-    static <T> T callOnClientThread(Minecraft mc, java.util.function.Supplier<T> supplier, T fallback) throws InterruptedException {
-        if (PackHideState.isHardLocked()) return fallback;
-        RunState scheduledRun = CURRENT_RUN.get();
-        java.util.function.Supplier<T> contextual = () -> {
-            AtomicReference<T> value = new AtomicReference<>(fallback);
-            withRunContext(scheduledRun, () -> value.set(supplier.get()));
-            return value.get();
-        };
-        if (mc.isSameThread()) {
-            if (PackHideState.isHardLocked()) return fallback;
-            return contextual.get();
-        }
-        AtomicReference<T> result = new AtomicReference<>(fallback);
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AtomicBoolean pending = new AtomicBoolean(true);
-        mc.execute(() -> {
-            try {
-                if (!pending.compareAndSet(true, false)) return;
-                if (PackHideState.isHardLocked()) return;
-                result.set(contextual.get());
-            } finally {
-                latch.countDown();
-            }
-        });
-        if (!latch.await(2000, TimeUnit.MILLISECONDS)) pending.set(false);
-        return result.get();
-    }
-
-    static <T> T callOnClientThread(Minecraft mc, java.util.function.Supplier<T> supplier, T fallback,
-                                            boolean tickAligned) throws InterruptedException {
-        return tickAligned ? callOnClientTick(mc, supplier, fallback) : callOnClientThread(mc, supplier, fallback);
-    }
-
-    private static <T> T callOnClientTick(Minecraft mc, java.util.function.Supplier<T> supplier, T fallback) throws InterruptedException {
-        if (PackHideState.isHardLocked()) return fallback;
-        RunState scheduledRun = CURRENT_RUN.get();
-        java.util.function.Supplier<T> contextual = () -> {
-            AtomicReference<T> value = new AtomicReference<>(fallback);
-            withRunContext(scheduledRun, () -> value.set(supplier.get()));
-            return value.get();
-        };
-        if (mc.isSameThread()) {
-            if (PackHideState.isHardLocked()) return fallback;
-            return contextual.get();
-        }
-        AtomicReference<T> result = new AtomicReference<>(fallback);
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AtomicBoolean pending = new AtomicBoolean(true);
-        TICK_ALIGNED.add(() -> {
-            try {
-                if (!pending.compareAndSet(true, false)) return;
-                if (PackHideState.isHardLocked()) return;
-                result.set(contextual.get());
-            } finally {
-                latch.countDown();
-            }
-        });
-        if (!latch.await(2000, TimeUnit.MILLISECONDS)) pending.set(false);
-        return result.get();
-    }
 
     private static void runPlaceAction(Minecraft mc, PlaceAction action) throws InterruptedException {
         if (mc == null || mc.player == null || mc.level == null) return;
@@ -2827,37 +2690,37 @@ public class MacroExecutor {
 
         if (interactFirst) {
 
-            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
         } else if (t == InteractTiming.WITH) {
 
-            runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 try { action.execute(mc); } catch (Exception e) { AutismClientAddon.LOG.debug("[Autism] Macro WITH-interact action failed", e); }
                 MacroBreak.sendBlockInteract(mc, placePos, face);
             }, action.isTickAligned());
         } else if (t == InteractTiming.AFTER_PLUS) {
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
             waitOneTick();
-            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
         } else {
 
             MacroActionRunner.runMacroActionOnClientThread(mc, action, "Place");
             if (ns > 0) java.util.concurrent.locks.LockSupport.parkNanos(ns);
-            runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
+            MacroClientThread.runOnClientThread(mc, () -> MacroBreak.sendBlockInteract(mc, placePos, face), action.isTickAligned());
         }
     }
 
     private static void waitForItemInSpecificHandlerSlot(Minecraft mc, int slotId, ItemTarget target) throws InterruptedException {
         while (isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(callOnClientThread(mc, () -> handlerSlotMatchesItem(mc, slotId, target), Boolean.FALSE))) return;
+            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotMatchesItem(mc, slotId, target), Boolean.FALSE))) return;
             waitOneTick();
         }
     }
 
     private static void waitForAnyItemInSpecificHandlerSlot(Minecraft mc, int slotId) throws InterruptedException {
         while (isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(callOnClientThread(mc, () -> handlerSlotHasAnyItem(mc, slotId), Boolean.FALSE))) return;
+            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> handlerSlotHasAnyItem(mc, slotId), Boolean.FALSE))) return;
             waitOneTick();
         }
     }
@@ -3166,7 +3029,7 @@ public class MacroExecutor {
                 latch.countDown();
             }
         };
-        if (tickAligned && !mc.isSameThread()) TICK_ALIGNED.add(task);
+        if (tickAligned && !mc.isSameThread()) MacroClientThread.TICK_ALIGNED.add(task);
         else mc.execute(task);
 
         latch.await(2, TimeUnit.SECONDS);
@@ -3376,7 +3239,7 @@ public class MacroExecutor {
 
             setCurrentStatus("Paying " + player + " " + amountLabel + " (" + (sent + 1) + "/" + targets.size() + ")");
 
-            runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 try {
                     if (PackHideState.isHardLocked() || mc.getConnection() == null) return;
                     if (commandToSend.startsWith("/") && commandToSend.length() > 1) {

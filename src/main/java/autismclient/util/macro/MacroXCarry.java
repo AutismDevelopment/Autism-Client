@@ -21,7 +21,7 @@ final class MacroXCarry {
 
         if (xsa.requiresCursorStorage()) {
             MacroExecutor.setCurrentStatus("XCarry Cursor");
-            MacroExecutor.runOnClientThread(mc, () -> xsa.execute(mc));
+            MacroClientThread.runOnClientThread(mc, () -> xsa.execute(mc));
             return;
         }
 
@@ -34,7 +34,7 @@ final class MacroXCarry {
         AtomicReference<List<Integer>> containerSlotIdsRef = new AtomicReference<>(List.of());
         AtomicBoolean usingContainer = new AtomicBoolean(false);
 
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player == null) return;
             net.minecraft.world.inventory.AbstractContainerMenu current = mc.player.containerMenu;
             if (current != null && current != mc.player.inventoryMenu) {
@@ -47,7 +47,7 @@ final class MacroXCarry {
 
         if (usingContainer.get() && containerTargetRef.get() == null) {
             AutismClientMessaging.sendPrefixed("XCarry click mode: missing container target, using fast mode.");
-            MacroExecutor.runOnClientThread(mc, () -> xsa.execute(mc));
+            MacroClientThread.runOnClientThread(mc, () -> xsa.execute(mc));
             return;
         }
 
@@ -55,7 +55,7 @@ final class MacroXCarry {
             for (int slotId : containerSlotIdsRef.get()) {
                 if (!MacroExecutor.isCurrentRunActive()) return;
                 MacroExecutor.setCurrentStatus("XCarry Click: collect");
-                MacroExecutor.runOnClientThread(mc, () -> {
+                MacroClientThread.runOnClientThread(mc, () -> {
                     if (mc.player == null || mc.gameMode == null) return;
                     net.minecraft.world.inventory.AbstractContainerMenu handler = containerHandlerRef.get();
                     if (handler == null || mc.player.containerMenu != handler) return;
@@ -66,7 +66,7 @@ final class MacroXCarry {
                 MacroExecutor.waitOneTick();
             }
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player == null || mc.getConnection() == null) return;
                 net.minecraft.world.inventory.AbstractContainerMenu handler = containerHandlerRef.get();
                 if (handler == null) return;
@@ -74,7 +74,7 @@ final class MacroXCarry {
             });
             MacroExecutor.waitOneTick();
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player != null) {
                     mc.player.containerMenu = mc.player.inventoryMenu;
                 }
@@ -82,25 +82,25 @@ final class MacroXCarry {
             MacroExecutor.waitOneTick();
         }
 
-        MacroExecutor.runOnClientThread(mc, xsa::preparePutInStorageGuard);
+        MacroClientThread.runOnClientThread(mc, xsa::preparePutInStorageGuard);
 
         int xCarryAttempts = 0;
         while (MacroExecutor.isCurrentRunActive() && xCarryAttempts++ < 512) {
-            XCarryAction.PutInMove move = MacroExecutor.callOnClientThread(mc, () -> {
+            XCarryAction.PutInMove move = MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.player == null) return null;
                 return xsa.findNextPutInMove(mc.player.inventoryMenu);
             }, null);
             if (move == null) break;
 
             MacroExecutor.setCurrentStatus("XCarry Click -> " + move.targetSlotId + " x" + move.count);
-            int targetBefore = MacroExecutor.callOnClientThread(mc, () -> {
+            int targetBefore = MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.player == null) return 0;
                 net.minecraft.world.inventory.InventoryMenu handler = mc.player.inventoryMenu;
                 if (move.targetSlotId < 0 || move.targetSlotId >= handler.slots.size()) return 0;
                 return handler.slots.get(move.targetSlotId).getItem().getCount();
             }, 0);
 
-            boolean moved = MacroExecutor.callOnClientThread(mc, () -> {
+            boolean moved = MacroClientThread.callOnClientThread(mc, () -> {
                 if (mc.player == null || mc.gameMode == null) return false;
                 net.minecraft.world.inventory.InventoryMenu handler = mc.player.inventoryMenu;
                 mc.player.containerMenu = handler;
@@ -123,7 +123,7 @@ final class MacroXCarry {
             MacroExecutor.waitOneTick();
         }
 
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player != null) {
                 boolean active = XCarryAction.hasStoredItems(mc.player.inventoryMenu, xsa.carryCursor, xsa.activeStorageSlotIds());
                 autismclient.util.AutismSharedState shared = autismclient.util.AutismSharedState.get();
@@ -136,7 +136,7 @@ final class MacroXCarry {
         });
 
         if (usingContainer.get()) {
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player == null) return;
                 net.minecraft.world.inventory.AbstractContainerMenu containerHandler = containerHandlerRef.get();
                 if (containerHandler != null) {
@@ -159,7 +159,7 @@ final class MacroXCarry {
 
         if (xsa.requiresCursorStorage()) {
             MacroExecutor.setCurrentStatus("XCarry Safe: Cursor");
-            MacroExecutor.runOnClientThread(mc, () -> xsa.execute(mc));
+            MacroClientThread.runOnClientThread(mc, () -> xsa.execute(mc));
             return;
         }
 
@@ -172,7 +172,7 @@ final class MacroXCarry {
         AtomicReference<List<Integer>> containerSlotIdsRef = new AtomicReference<>(List.of());
         AtomicBoolean usingContainer = new AtomicBoolean(false);
 
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player == null) return;
             net.minecraft.world.inventory.AbstractContainerMenu current = mc.player.containerMenu;
             if (current != null && current != mc.player.inventoryMenu) {
@@ -185,7 +185,7 @@ final class MacroXCarry {
 
         if (usingContainer.get() && containerTargetRef.get() == null) {
             AutismClientMessaging.sendPrefixed("XCarry safe mode: missing container target, using fast mode.");
-            MacroExecutor.runOnClientThread(mc, () -> xsa.execute(mc));
+            MacroClientThread.runOnClientThread(mc, () -> xsa.execute(mc));
             return;
         }
 
@@ -196,7 +196,7 @@ final class MacroXCarry {
                 sendContainerClickThenTick(mc, containerHandlerRef.get(), slotId, 0, ContainerInput.QUICK_MOVE);
             }
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player == null || mc.getConnection() == null) return;
                 net.minecraft.world.inventory.AbstractContainerMenu handler = containerHandlerRef.get();
                 if (handler == null) return;
@@ -204,7 +204,7 @@ final class MacroXCarry {
             });
             MacroExecutor.waitOneTick();
 
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player != null) {
                     mc.player.containerMenu = mc.player.inventoryMenu;
                 }
@@ -212,14 +212,14 @@ final class MacroXCarry {
             MacroExecutor.waitOneTick();
         }
 
-        MacroExecutor.runOnClientThread(mc, xsa::preparePutInStorageGuard);
+        MacroClientThread.runOnClientThread(mc, xsa::preparePutInStorageGuard);
 
         int safeDelayTicks = XCarryAction.clampSafeClickDelayTicks(xsa.safeClickDelayTicks);
         boolean delayAfterPickup = xsa.safeClickDelayAfterPickup;
         boolean delayBeforeReturn = xsa.safeClickDelayBeforeReturn;
         int attempts = 0;
         while (MacroExecutor.isCurrentRunActive() && attempts++ < 512) {
-            List<XCarryAction.PutInMove> group = MacroExecutor.callOnClientThread(mc, () -> nextXCarrySafeGroup(mc, xsa), List.of());
+            List<XCarryAction.PutInMove> group = MacroClientThread.callOnClientThread(mc, () -> nextXCarrySafeGroup(mc, xsa), List.of());
             if (group.isEmpty()) break;
 
             XCarryAction.PutInMove first = group.get(0);
@@ -233,7 +233,7 @@ final class MacroXCarry {
             }
         }
 
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player != null) {
                 boolean active = XCarryAction.hasStoredItems(mc.player.inventoryMenu, xsa.carryCursor, xsa.activeStorageSlotIds());
                 autismclient.util.AutismSharedState shared = autismclient.util.AutismSharedState.get();
@@ -246,7 +246,7 @@ final class MacroXCarry {
         });
 
         if (usingContainer.get()) {
-            MacroExecutor.runOnClientThread(mc, () -> {
+            MacroClientThread.runOnClientThread(mc, () -> {
                 if (mc.player == null) return;
                 net.minecraft.world.inventory.AbstractContainerMenu containerHandler = containerHandlerRef.get();
                 if (containerHandler != null) {
@@ -289,7 +289,7 @@ final class MacroXCarry {
     private static boolean executeXCarrySafeGroup(Minecraft mc, List<XCarryAction.PutInMove> group, int delayTicks,
                                                   boolean delayAfterPickup, boolean delayBeforeReturn) throws InterruptedException {
         if (mc == null || mc.player == null || mc.gameMode == null || group == null || group.isEmpty()) return false;
-        SafeGroupSnapshot snapshot = MacroExecutor.callOnClientThread(mc, () -> snapshotXCarrySafeGroup(mc, group), SafeGroupSnapshot.invalid());
+        SafeGroupSnapshot snapshot = MacroClientThread.callOnClientThread(mc, () -> snapshotXCarrySafeGroup(mc, group), SafeGroupSnapshot.invalid());
         if (!snapshot.valid) return false;
 
         SafeGroupSnapshot expected = executeXCarrySafeScript(mc, group, snapshot, delayTicks, delayAfterPickup, delayBeforeReturn);
@@ -305,7 +305,7 @@ final class MacroXCarry {
             return SafeGroupSnapshot.invalid();
         }
         XCarryAction.PutInMove first = group.get(0);
-        if (!Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
             return handler != null
                     && handler.getCarried().isEmpty()
@@ -314,7 +314,7 @@ final class MacroXCarry {
             return SafeGroupSnapshot.invalid();
         }
 
-        SafeQuickCraftPlan quickCraftPlan = MacroExecutor.callOnClientThread(mc, () -> {
+        SafeQuickCraftPlan quickCraftPlan = MacroClientThread.callOnClientThread(mc, () -> {
             InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
             return createXCarryQuickCraftPlan(handler, group, snapshot);
         }, SafeQuickCraftPlan.invalid());
@@ -331,7 +331,7 @@ final class MacroXCarry {
                     return SafeGroupSnapshot.invalid();
                 }
                 waitXCarrySafeAfterPickupDelay(delayTicks, true);
-                if (!Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+                if (!Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
                     InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
                     return xcarrySafeCarryingNow(handler, snapshot.sourceStack, snapshot.sourceCount);
                 }, Boolean.FALSE))) {
@@ -409,7 +409,7 @@ final class MacroXCarry {
             }
         }
 
-        boolean hasLeftover = Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        boolean hasLeftover = Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
             return handler != null && !handler.getCarried().isEmpty();
         }, Boolean.FALSE));
@@ -417,12 +417,12 @@ final class MacroXCarry {
             if (delayBeforeReturn) {
                 waitXCarrySafeDelayTicks(delayTicks);
             }
-            int returnSlot = MacroExecutor.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, first.sourceSlotId()), -1);
+            int returnSlot = MacroClientThread.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, first.sourceSlotId()), -1);
             if (returnSlot < 0) return SafeGroupSnapshot.invalid();
             if (!sendXCarrySafeInventoryClick(mc, returnSlot, 0, ContainerInput.PICKUP)) return SafeGroupSnapshot.invalid();
         }
 
-        boolean cursorEmpty = Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        boolean cursorEmpty = Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
             return handler != null && handler.getCarried().isEmpty();
         }, Boolean.FALSE));
@@ -433,7 +433,7 @@ final class MacroXCarry {
         if (mc == null || count <= 0) return false;
         int remaining = count;
         while (remaining > 0 && MacroExecutor.isCurrentRunActive()) {
-            int carriedCount = MacroExecutor.callOnClientThread(mc, () -> {
+            int carriedCount = MacroClientThread.callOnClientThread(mc, () -> {
                 InventoryMenu handler = mc.player == null ? null : mc.player.inventoryMenu;
                 return handler == null ? 0 : handler.getCarried().getCount();
             }, 0);
@@ -611,7 +611,7 @@ final class MacroXCarry {
 
     private static boolean sendXCarrySafeInventoryClickBatch(Minecraft mc, SafeInventoryClick... clicks) throws InterruptedException {
         if (mc == null || clicks == null || clicks.length == 0) return false;
-        return Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> {
+        return Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.player == null || mc.gameMode == null) return false;
             InventoryMenu handler = mc.player.inventoryMenu;
             if (handler == null) return false;
@@ -640,7 +640,7 @@ final class MacroXCarry {
 
     private static boolean sendInventoryClickThenTick(Minecraft mc, int slotId, int button, ContainerInput input) throws InterruptedException {
         if (mc == null || mc.player == null || mc.gameMode == null) return false;
-        boolean clicked = MacroExecutor.callOnClientThread(mc, () -> {
+        boolean clicked = MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.player == null || mc.gameMode == null) return false;
             InventoryMenu handler = mc.player.inventoryMenu;
             mc.player.containerMenu = handler;
@@ -656,7 +656,7 @@ final class MacroXCarry {
     private static boolean sendContainerClickThenTick(Minecraft mc, net.minecraft.world.inventory.AbstractContainerMenu handler,
                                                       int slotId, int button, ContainerInput input) throws InterruptedException {
         if (mc == null || handler == null || input == null) return false;
-        boolean clicked = MacroExecutor.callOnClientThread(mc, () -> {
+        boolean clicked = MacroClientThread.callOnClientThread(mc, () -> {
             if (mc.player == null || mc.gameMode == null || mc.player.containerMenu != handler) return false;
             if (slotId < 0 || slotId >= handler.slots.size()) return false;
             if (handler.slots.get(slotId).getItem().isEmpty()) return false;
@@ -671,10 +671,10 @@ final class MacroXCarry {
     private static boolean waitForXCarrySafeLocal(Minecraft mc, int ticks, java.util.function.BooleanSupplier accepted) throws InterruptedException {
         int maxTicks = Math.max(1, ticks);
         for (int i = 0; i < maxTicks && MacroExecutor.isCurrentRunActive(); i++) {
-            if (Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> accepted != null && accepted.getAsBoolean(), Boolean.FALSE))) return true;
+            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> accepted != null && accepted.getAsBoolean(), Boolean.FALSE))) return true;
             MacroExecutor.waitOneTick();
         }
-        return Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> accepted != null && accepted.getAsBoolean(), Boolean.FALSE));
+        return Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> accepted != null && accepted.getAsBoolean(), Boolean.FALSE));
     }
 
     private static void waitForXCarrySafeSettle(Minecraft mc, long startRevision, int minTicks, long maxMs) throws InterruptedException {
@@ -693,9 +693,9 @@ final class MacroXCarry {
 
     private static boolean waitForXCarrySafeFinalState(Minecraft mc, SafeGroupSnapshot snapshot, long startRevision) throws InterruptedException {
         waitForXCarrySafeSettle(mc, startRevision, 2, 250L);
-        if (Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> xcarrySafeFinalMatches(mc, snapshot), Boolean.FALSE))) return true;
+        if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> xcarrySafeFinalMatches(mc, snapshot), Boolean.FALSE))) return true;
         waitForXCarrySafeSettle(mc, MacroConditionRegistry.inventorySyncRevision(), 3, 350L);
-        return Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, () -> xcarrySafeFinalMatches(mc, snapshot), Boolean.FALSE));
+        return Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, () -> xcarrySafeFinalMatches(mc, snapshot), Boolean.FALSE));
     }
 
     private static boolean xcarrySafeFinalMatches(Minecraft mc, SafeGroupSnapshot snapshot) {
@@ -719,11 +719,11 @@ final class MacroXCarry {
     private static boolean returnXCarrySafeLeftovers(Minecraft mc, int preferredSlotId, ItemStack expected,
                                                      int delayTicks, boolean delayBeforeReturn) throws InterruptedException {
         if (mc == null || mc.player == null || expected == null || expected.isEmpty()) return false;
-        if (MacroExecutor.callOnClientThread(mc, () -> mc.player != null && mc.player.inventoryMenu.getCarried().isEmpty(), Boolean.FALSE)) {
+        if (MacroClientThread.callOnClientThread(mc, () -> mc.player != null && mc.player.inventoryMenu.getCarried().isEmpty(), Boolean.FALSE)) {
             return true;
         }
 
-        int returnSlot = MacroExecutor.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, preferredSlotId), -1);
+        int returnSlot = MacroClientThread.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, preferredSlotId), -1);
         if (returnSlot < 0) return false;
         if (delayBeforeReturn) waitXCarrySafeDelayTicks(delayTicks);
         return sendInventoryClickThenTick(mc, returnSlot, 0, ContainerInput.PICKUP)
@@ -769,8 +769,8 @@ final class MacroXCarry {
 
     private static void rollbackXCarryCursorSafe(Minecraft mc, int sourceSlotId, int delayTicks, boolean delayBeforeReturn) throws InterruptedException {
         if (mc == null || mc.player == null || mc.gameMode == null) return;
-        if (MacroExecutor.callOnClientThread(mc, () -> mc.player != null && mc.player.inventoryMenu.getCarried().isEmpty(), Boolean.FALSE)) return;
-        int returnSlot = MacroExecutor.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, sourceSlotId), -1);
+        if (MacroClientThread.callOnClientThread(mc, () -> mc.player != null && mc.player.inventoryMenu.getCarried().isEmpty(), Boolean.FALSE)) return;
+        int returnSlot = MacroClientThread.callOnClientThread(mc, () -> findXCarrySafeReturnSlot(mc, sourceSlotId), -1);
         if (returnSlot >= 0) {
             if (delayBeforeReturn) waitXCarrySafeDelayTicks(delayTicks);
             sendInventoryClickThenTick(mc, returnSlot, 0, ContainerInput.PICKUP);
@@ -835,7 +835,7 @@ final class MacroXCarry {
     }
 
     private static void rollbackXCarryCursor(Minecraft mc, int sourceSlotId) throws InterruptedException {
-        MacroExecutor.runOnClientThread(mc, () -> {
+        MacroClientThread.runOnClientThread(mc, () -> {
             if (mc.player == null || mc.gameMode == null) return;
             net.minecraft.world.inventory.InventoryMenu handler = mc.player.inventoryMenu;
             mc.player.containerMenu = handler;
@@ -849,12 +849,12 @@ final class MacroXCarry {
     private static boolean waitForXCarryCondition(Minecraft mc, long timeoutMs, java.util.function.Supplier<Boolean> condition) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         while (MacroExecutor.isCurrentRunActive()) {
-            if (Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, condition, Boolean.FALSE))) {
+            if (Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, condition, Boolean.FALSE))) {
                 return true;
             }
             if (System.nanoTime() >= deadline) break;
             MacroExecutor.waitOneTick();
         }
-        return Boolean.TRUE.equals(MacroExecutor.callOnClientThread(mc, condition, Boolean.FALSE));
+        return Boolean.TRUE.equals(MacroClientThread.callOnClientThread(mc, condition, Boolean.FALSE));
     }
 }
