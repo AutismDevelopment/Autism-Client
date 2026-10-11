@@ -608,7 +608,7 @@ final class MacroRunLoop {
                                 MacroExecutor.REPEAT_PACKET_CONTEXT.set(new MacroExecutor.RepeatPacketContext(macro, j + 1, endIdx));
                                 MacroExecutor.REPEAT_PACKET_SKIP.set(0);
                                 try {
-                                    MacroExecutor.executeSingleActionWithWaits(mc, subAction, module);
+                                    MacroDispatcher.executeSingleActionWithWaits(mc, subAction, module);
                                     j += Math.max(0, MacroExecutor.REPEAT_PACKET_SKIP.get());
                                 } finally {
                                     MacroExecutor.REPEAT_PACKET_SKIP.set(0);

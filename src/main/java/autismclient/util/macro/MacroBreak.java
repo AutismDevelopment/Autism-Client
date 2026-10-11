@@ -483,7 +483,7 @@ final class MacroBreak {
             for (MacroAction next : actions) {
                 if (next == null || !next.isEnabled() || !MacroExecutor.isCurrentRunActive()) continue;
                 try {
-                    MacroExecutor.executeSingleActionWithWaits(mc, next, module);
+                    MacroDispatcher.executeSingleActionWithWaits(mc, next, module);
                 } catch (InterruptedException e) {
                     throw e;
                 } catch (Throwable t) {

@@ -80,7 +80,7 @@ final class MacroRace {
         for (MacroAction action : actions) {
             if (action == null || !action.isEnabled()) continue;
             try {
-                MacroExecutor.executeSingleActionWithWaits(mc, action, AutismModule.get());
+                MacroDispatcher.executeSingleActionWithWaits(mc, action, AutismModule.get());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -220,7 +220,7 @@ final class MacroRace {
             String label = report.reportLabel == null || report.reportLabel.isBlank() ? "Report" : report.reportLabel.trim();
             MacroExecutor.setCurrentStatus("Report: start " + startCondition.getDisplayName());
             CompletableFuture<MacroExecutor.MacroEvent> startAnchor = startActionAnchorFuture(startCondition);
-            MacroExecutor.executeSingleActionWithWaits(mc, startCondition, null);
+            MacroDispatcher.executeSingleActionWithWaits(mc, startCondition, null);
             if (!MacroExecutor.isCurrentRunActive()) return conditionCount;
             MacroExecutor.MacroEvent startEvent = waitForAnchorOrNow(startAnchor, 250, startCondition.getDisplayName(), "client action");
 
@@ -445,7 +445,7 @@ final class MacroRace {
         if (trigger == null) return true;
         CompletableFuture<?> future = raceConditionFuture(mc, trigger);
         if (future == null) {
-            MacroExecutor.executeSingleActionWithWaits(mc, trigger, null);
+            MacroDispatcher.executeSingleActionWithWaits(mc, trigger, null);
             return true;
         }
         boolean fired = waitForFutureDone(future, timeoutMs);
@@ -695,7 +695,7 @@ final class MacroRace {
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
             mc.execute(() -> MacroExecutor.withRunContext(run, () -> {
                 try {
-                    MacroExecutor.executeSingleActionWithWaits(mc, trigger, null);
+                    MacroDispatcher.executeSingleActionWithWaits(mc, trigger, null);
                     done.complete(new MacroExecutor.MacroEvent(null, trigger.getDisplayName(), System.nanoTime(), null));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -902,7 +902,7 @@ final class MacroRace {
             MacroExecutor.RunState run = MacroExecutor.CURRENT_RUN.get();
             return CompletableFuture.runAsync(() -> MacroExecutor.withRunContext(run, () -> {
                 try {
-                    MacroExecutor.executeSingleActionWithWaits(mc, trigger, null);
+                    MacroDispatcher.executeSingleActionWithWaits(mc, trigger, null);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
