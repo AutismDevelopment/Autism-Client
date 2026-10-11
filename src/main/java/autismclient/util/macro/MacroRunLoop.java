@@ -214,7 +214,7 @@ final class MacroRunLoop {
                             batchEnd++;
                         }
 
-                        MacroExecutor.executeBurstPackets(mc, packetBatch);
+                        MacroRender.executeBurstPackets(mc, packetBatch);
 
                         i = batchEnd - 1;
                         continue;
@@ -577,14 +577,14 @@ final class MacroRunLoop {
                     }
                     else if (action instanceof LookAtBlockAction) {
                         LookAtBlockAction la = (LookAtBlockAction) action;
-                        LookAtBlockAction.RotationTarget rotationTarget = MacroExecutor.resolveLookAtTargetOnClient(mc, la);
+                        LookAtBlockAction.RotationTarget rotationTarget = MacroRender.resolveLookAtTargetOnClient(mc, la);
                         if (rotationTarget == null) {
                             continue;
                         }
                         if (la.smooth) {
-                            MacroExecutor.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
+                            MacroRender.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
                             if (la.waitForCompletion) {
-                                MacroExecutor.waitForSmoothRotationCompletion();
+                                MacroRender.waitForSmoothRotationCompletion();
                             }
                         } else {
                             mc.execute(() -> {
@@ -752,7 +752,7 @@ final class MacroRunLoop {
                         if (mc.level == null) continue;
 
                         java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            MacroExecutor.preGeneratePackets(macro, i + 1, tsa.preGenCount);
+                            MacroRender.preGeneratePackets(macro, i + 1, tsa.preGenCount);
 
                         long targetTick = mc.level.getGameTime() + tsa.tickOffset;
                         MacroExecutor.setCurrentStatus("Tick Sync -> " + targetTick + " (" + preGenerated.size() + " pkts)");
@@ -762,8 +762,8 @@ final class MacroRunLoop {
                         }
 
                         if (MacroExecutor.isCurrentRunActive()) {
-                            MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
-                            i += MacroExecutor.countPreGeneratedActions(macro, i + 1, preGenerated.size());
+                            MacroRender.executePreGeneratedBurst(mc, preGenerated);
+                            i += MacroRender.countPreGeneratedActions(macro, i + 1, preGenerated.size());
                             AutismClientMessaging.sendPrefixed("Tick sync: " + preGenerated.size() + " pkts sent");
                         }
                     }
@@ -773,7 +773,7 @@ final class MacroRunLoop {
                         if (mc.player == null || mc.player.containerMenu == null) continue;
 
                         java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            MacroExecutor.preGeneratePackets(macro, i + 1, rsa.preGenCount);
+                            MacroRender.preGeneratePackets(macro, i + 1, rsa.preGenCount);
 
                         int baseRevision = mc.player.containerMenu.getStateId();
                         int targetRevision = baseRevision + rsa.revisionOffset;
@@ -786,8 +786,8 @@ final class MacroRunLoop {
                         }
 
                         if (MacroExecutor.isCurrentRunActive() && mc.player != null && mc.player.containerMenu != null) {
-                            MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
-                            i += MacroExecutor.countPreGeneratedActions(macro, i + 1, preGenerated.size());
+                            MacroRender.executePreGeneratedBurst(mc, preGenerated);
+                            i += MacroRender.countPreGeneratedActions(macro, i + 1, preGenerated.size());
                             AutismClientMessaging.sendPrefixed("Rev sync: " + preGenerated.size() + " pkts sent");
                         }
                     }
@@ -797,7 +797,7 @@ final class MacroRunLoop {
                         if (mc.getConnection() == null) continue;
 
                         java.util.List<net.minecraft.network.protocol.Packet<?>> preGenerated =
-                            MacroExecutor.preGeneratePackets(macro, i + 1, stsa.preGenCount);
+                            MacroRender.preGeneratePackets(macro, i + 1, stsa.preGenCount);
 
                         int sampleWaitMs = 0;
                         while (MacroExecutor.isCurrentRunActive() && !ServerTickTracker.isReady() && sampleWaitMs < stsa.maxWaitMs) {
@@ -834,8 +834,8 @@ final class MacroRunLoop {
                         }
 
                         if (MacroExecutor.isCurrentRunActive()) {
-                            MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
-                            i += MacroExecutor.countPreGeneratedActions(macro, i + 1, preGenerated.size());
+                            MacroRender.executePreGeneratedBurst(mc, preGenerated);
+                            i += MacroRender.countPreGeneratedActions(macro, i + 1, preGenerated.size());
                             long actualDelay = (System.nanoTime() - optimalTime) / 1_000_000L;
                             AutismClientMessaging.sendPrefixed("ServerSync: " + preGenerated.size() + " pkts (+" + actualDelay + "ms)");
                         }
@@ -843,9 +843,9 @@ final class MacroRunLoop {
                     else if (action instanceof RotateAction) {
                         RotateAction ra = (RotateAction) action;
                         if (ra.smooth) {
-                            MacroExecutor.startSmoothRotation(ra.yaw, ra.pitch, ra.getRotationStep());
+                            MacroRender.startSmoothRotation(ra.yaw, ra.pitch, ra.getRotationStep());
                             if (ra.waitForCompletion) {
-                                MacroExecutor.waitForSmoothRotationCompletion();
+                                MacroRender.waitForSmoothRotationCompletion();
                             }
                         } else {
                             mc.execute(() -> action.execute(mc));
@@ -855,14 +855,14 @@ final class MacroRunLoop {
                         runPacedTpAction(mc, pacedTp);
                     }
                     else if (action instanceof LookAtBlockAction la) {
-                        LookAtBlockAction.RotationTarget rotationTarget = MacroExecutor.resolveLookAtTargetOnClient(mc, la);
+                        LookAtBlockAction.RotationTarget rotationTarget = MacroRender.resolveLookAtTargetOnClient(mc, la);
                         if (rotationTarget == null) {
                             continue;
                         }
                         if (la.smooth) {
-                            MacroExecutor.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
+                            MacroRender.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
                             if (la.waitForCompletion) {
-                                MacroExecutor.waitForSmoothRotationCompletion();
+                                MacroRender.waitForSmoothRotationCompletion();
                             }
                         } else {
                             mc.execute(() -> {
@@ -1159,7 +1159,7 @@ final class MacroRunLoop {
             }
             PacketGateManager.clearOwnerAndFlushConfigured(runState.id, mc == null ? null : mc.getConnection());
             MacroExecutor.finishCurrentRun();
-            MacroExecutor.cancelRotation(runState);
+            MacroRender.cancelRotation(runState);
             if (!MacroExecutor.isRunning.get()) MacroConditionRegistry.cancelAll();
 
             MacroExecutor.broadcastStepProgress(runState, -1, 0, "");

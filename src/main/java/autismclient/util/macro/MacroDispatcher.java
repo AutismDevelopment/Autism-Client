@@ -221,14 +221,14 @@ final class MacroDispatcher {
             }
         } else if (action instanceof LookAtBlockAction) {
             LookAtBlockAction la = (LookAtBlockAction) action;
-            LookAtBlockAction.RotationTarget rotationTarget = MacroExecutor.resolveLookAtTargetOnClient(mc, la);
+            LookAtBlockAction.RotationTarget rotationTarget = MacroRender.resolveLookAtTargetOnClient(mc, la);
             if (rotationTarget == null) {
                 return;
             }
             if (la.smooth) {
-                MacroExecutor.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
+                MacroRender.startSmoothRotation(rotationTarget.yaw(), rotationTarget.pitch(), la.getRotationStep());
                 if (la.waitForCompletion) {
-                    MacroExecutor.waitForSmoothRotationCompletion();
+                    MacroRender.waitForSmoothRotationCompletion();
                 }
             } else {
                 mc.execute(() -> {
@@ -240,9 +240,9 @@ final class MacroDispatcher {
         } else if (action instanceof RotateAction) {
             RotateAction ra = (RotateAction) action;
             if (ra.smooth) {
-                MacroExecutor.startSmoothRotation(ra.yaw, ra.pitch, ra.getRotationStep());
+                MacroRender.startSmoothRotation(ra.yaw, ra.pitch, ra.getRotationStep());
                 if (ra.waitForCompletion) {
-                    MacroExecutor.waitForSmoothRotationCompletion();
+                    MacroRender.waitForSmoothRotationCompletion();
                 }
             } else {
                 mc.execute(() -> action.execute(mc));
@@ -419,9 +419,9 @@ final class MacroDispatcher {
                 java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
             }
             if (MacroExecutor.isCurrentRunActive()) {
-                MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
+                MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
-                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroExecutor.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
+                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
                 AutismClientMessaging.sendPrefixed("Tick sync: " + preGenerated.size() + " pkts sent");
             }
         } else if (action instanceof RevisionSyncAction rsa) {
@@ -437,9 +437,9 @@ final class MacroDispatcher {
                 java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
             }
             if (MacroExecutor.isCurrentRunActive() && mc.player != null && mc.player.containerMenu != null) {
-                MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
+                MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
-                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroExecutor.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
+                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
                 AutismClientMessaging.sendPrefixed("Rev sync: " + preGenerated.size() + " pkts sent");
             }
         } else if (action instanceof ServerTickSyncAction stsa) {
@@ -474,9 +474,9 @@ final class MacroDispatcher {
                 }
             }
             if (MacroExecutor.isCurrentRunActive()) {
-                MacroExecutor.executePreGeneratedBurst(mc, preGenerated);
+                MacroRender.executePreGeneratedBurst(mc, preGenerated);
                 MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
-                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroExecutor.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
+                if (context != null) MacroExecutor.REPEAT_PACKET_SKIP.set(MacroRender.countPreGeneratedActions(context.macro(), context.startIdx(), preGenerated.size(), context.endIdx()));
                 long actualDelay = (System.nanoTime() - optimalTime) / 1_000_000L;
                 AutismClientMessaging.sendPrefixed("ServerSync: " + preGenerated.size() + " pkts (+" + actualDelay + "ms)");
             }

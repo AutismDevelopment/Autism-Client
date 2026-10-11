@@ -55,7 +55,7 @@ final class MacroActionRunner {
             int count, Minecraft mc) {
         MacroExecutor.RepeatPacketContext context = MacroExecutor.REPEAT_PACKET_CONTEXT.get();
         if (context == null || context.macro() == null) return new java.util.ArrayList<>();
-        return MacroExecutor.preGeneratePackets(context.macro(), context.startIdx(), count, context.endIdx());
+        return MacroRender.preGeneratePackets(context.macro(), context.startIdx(), count, context.endIdx());
     }
 
     public static boolean isTargetWaitInteractionAction(MacroAction action) {
