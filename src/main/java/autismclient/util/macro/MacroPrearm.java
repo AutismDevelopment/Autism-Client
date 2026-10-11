@@ -53,7 +53,7 @@ final class MacroPrearm {
         MacroAction next = actions.get(nextIndex);
         if (next == null || !next.isEnabled() || !next.listensDuringPreviousAction()) return;
         if (!MacroDynamicBindings.apply(next, mc)) return;
-        if (!MacroExecutor.dynamicTextInputsAvailable(next, mc)) return;
+        if (!MacroActionRunner.dynamicTextInputsAvailable(next, mc)) return;
         if (!isWaitConditionAction(next)) return;
         synchronized (run.prearmedWaits) {
             if (run.prearmedWaits.containsKey(next)) return;
