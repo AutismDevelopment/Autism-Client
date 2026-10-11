@@ -517,21 +517,21 @@ final class MacroRace {
 
     private static CompletableFuture<MacroExecutor.MacroEvent> startActionAnchorFuture(MacroAction action) {
         if (action instanceof PacketClickAction) {
-            return MacroExecutor.awaitTimedSend(packet -> packet instanceof ServerboundContainerClickPacket).future;
+            return MacroPacketObserve.awaitTimedSend(packet -> packet instanceof ServerboundContainerClickPacket).future;
         }
         if (action instanceof ItemAction) {
-            return MacroExecutor.awaitTimedSend(packet -> packet instanceof ServerboundContainerClickPacket).future;
+            return MacroPacketObserve.awaitTimedSend(packet -> packet instanceof ServerboundContainerClickPacket).future;
         }
         if (action instanceof CloseGuiAction) {
-            return MacroExecutor.awaitTimedSend(packet -> packet instanceof net.minecraft.network.protocol.game.ServerboundContainerClosePacket).future;
+            return MacroPacketObserve.awaitTimedSend(packet -> packet instanceof net.minecraft.network.protocol.game.ServerboundContainerClosePacket).future;
         }
         if (action instanceof SendChatAction) {
-            return MacroExecutor.awaitTimedSend(packet -> packet instanceof net.minecraft.network.protocol.game.ServerboundChatPacket
+            return MacroPacketObserve.awaitTimedSend(packet -> packet instanceof net.minecraft.network.protocol.game.ServerboundChatPacket
                 || packet instanceof net.minecraft.network.protocol.game.ServerboundChatCommandPacket
                 || packet instanceof net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket).future;
         }
         if (action instanceof SendPacketAction || action instanceof PayloadAction) {
-            return MacroExecutor.awaitTimedSend(packet -> true).future;
+            return MacroPacketObserve.awaitTimedSend(packet -> true).future;
         }
         return null;
     }
@@ -597,7 +597,7 @@ final class MacroRace {
             MacroVariableContext context = MacroExecutor.currentVariableContext();
             java.util.concurrent.atomic.AtomicReference<java.util.Map<String, MacroValue>> captures =
                 new java.util.concurrent.atomic.AtomicReference<>(java.util.Map.of());
-            MacroExecutor.TimedOneShotPacketListener listener = MacroExecutor.awaitTimedReceive((packet, direction, now) -> {
+            MacroPacketObserve.TimedOneShotPacketListener listener = MacroPacketObserve.awaitTimedReceive((packet, direction, now) -> {
                 MacroExecutor.ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
                 var matched = MacroChatObserve.captureChatAction(chat, capture, context);
                 matched.ifPresent(captures::set);
@@ -616,14 +616,14 @@ final class MacroRace {
         if (trigger instanceof WaitForPacketAction packetAction) {
             java.util.List<String> targets = packetAction.effectiveList();
             CompletableFuture<MacroExecutor.MacroEvent> matched = new CompletableFuture<>();
-            MacroExecutor.TimedOneShotPacketListener recv = MacroExecutor.awaitTimedReceive((packet, direction, now) -> {
+            MacroPacketObserve.TimedOneShotPacketListener recv = MacroPacketObserve.awaitTimedReceive((packet, direction, now) -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
                     if (MacroPacketWait.matchesPacketTarget(target, packet, "S2C")) return true;
                 }
                 return false;
             });
-            MacroExecutor.TimedOneShotPacketListener send = MacroExecutor.awaitTimedSend((packet, direction, now) -> {
+            MacroPacketObserve.TimedOneShotPacketListener send = MacroPacketObserve.awaitTimedSend((packet, direction, now) -> {
                 if (targets.isEmpty()) return true;
                 for (String target : targets) {
                     if (MacroPacketWait.matchesPacketTarget(target, packet, "C2S")) return true;
@@ -641,7 +641,7 @@ final class MacroRace {
         if (trigger instanceof WaitForWorldChangeAction world) {
             CompletableFuture<MacroExecutor.MacroEvent> done = new CompletableFuture<>();
             CompletableFuture<Void> tickFuture = MacroConditionRegistry.waitForWorldChange(world);
-            MacroExecutor.TimedOneShotPacketListener worldListener = MacroExecutor.awaitTimedReceive((packet, direction, now) -> isWorldTransitionPacket(packet));
+            MacroPacketObserve.TimedOneShotPacketListener worldListener = MacroPacketObserve.awaitTimedReceive((packet, direction, now) -> isWorldTransitionPacket(packet));
             tickFuture.whenComplete((v, e) -> {
                 if (e != null) {
                     if (!done.isDone()) done.cancel(true);
@@ -667,7 +667,7 @@ final class MacroRace {
         if (trigger instanceof WaitForTeleportAction teleport) {
             net.minecraft.world.phys.Vec3 origin = mc.player == null ? net.minecraft.world.phys.Vec3.ZERO : mc.player.position();
             CompletableFuture<MacroExecutor.MacroEvent> done = new CompletableFuture<>();
-            MacroExecutor.TimedOneShotPacketListener teleListener = MacroExecutor.awaitTimedReceive((packet, direction, now) ->
+            MacroPacketObserve.TimedOneShotPacketListener teleListener = MacroPacketObserve.awaitTimedReceive((packet, direction, now) ->
                 packet instanceof ClientboundPlayerPositionPacket || isWorldTransitionPacket(packet));
             teleListener.future.whenComplete((event, error) -> {
                 teleListener.cancel();

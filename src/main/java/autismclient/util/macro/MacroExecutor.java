@@ -522,7 +522,7 @@ public class MacroExecutor {
         ACTIVE_RUN_LIST = java.util.List.copyOf(ACTIVE_RUNS.values());
     }
 
-    private static java.util.List<RunState> activeRunSnapshot() {
+    static java.util.List<RunState> activeRunSnapshot() {
         return ACTIVE_RUN_LIST;
     }
 
@@ -918,7 +918,7 @@ public class MacroExecutor {
         backgroundMoves.clear();
         reconcilePersistentInput(Minecraft.getInstance());
         MacroConditionRegistry.cancelAll();
-        drainOneShotListeners();
+        MacroPacketObserve.drainOneShotListeners();
         isWaitingForChat.set(false);
         isWaitingForPacket.set(false);
         synchronized (packetWaitLock) {
@@ -976,10 +976,10 @@ public class MacroExecutor {
         return isRunning.get()
             || activePacketFuture != null
             || isWaitingForPacket.get()
-            || !ONE_SHOT_RECV.isEmpty()
-            || !ONE_SHOT_SEND.isEmpty()
-            || !TIMED_ONE_SHOT_RECV.isEmpty()
-            || !TIMED_ONE_SHOT_SEND.isEmpty();
+            || !MacroPacketObserve.ONE_SHOT_RECV.isEmpty()
+            || !MacroPacketObserve.ONE_SHOT_SEND.isEmpty()
+            || !MacroPacketObserve.TIMED_ONE_SHOT_RECV.isEmpty()
+            || !MacroPacketObserve.TIMED_ONE_SHOT_SEND.isEmpty();
     }
 
     public static boolean isMacroRunning(String macroName) {
@@ -1121,7 +1121,7 @@ public class MacroExecutor {
         }
     }
 
-    private static final long ONE_SHOT_EXPIRE_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(10);
+    static final long ONE_SHOT_EXPIRE_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(10);
 
     public static final class OneShotPacketListener {
         public final java.util.concurrent.CompletableFuture<Packet<?>> future = new java.util.concurrent.CompletableFuture<>();
@@ -1153,217 +1153,30 @@ public class MacroExecutor {
         }
     }
 
-    static final class TimedOneShotPacketListener {
-        public final java.util.concurrent.CompletableFuture<MacroEvent> future = new java.util.concurrent.CompletableFuture<>();
-        private final java.util.List<TimedOneShotPacketListener> registry;
-        private final TimedPacketMatch match;
-        private final long expireAtNanos;
-        TimedOneShotPacketListener(java.util.List<TimedOneShotPacketListener> registry, TimedPacketMatch match) {
-            this.registry = registry;
-            this.match = match;
-            this.expireAtNanos = System.nanoTime() + ONE_SHOT_EXPIRE_NANOS;
-            registry.add(this);
-        }
-
-        boolean offer(MacroEvent event) {
-            if (future.isDone()) return true;
-            if (event.nanoTime() - expireAtNanos >= 0L) { future.cancel(true); return true; }
-            if (match.test(event.packet(), event.direction(), event.nanoTime())) {
-                future.complete(event);
-                return true;
-            }
-            return false;
-        }
-        public void cancel() {
-            registry.remove(this);
-            if (!future.isDone()) future.cancel(true);
-        }
-    }
-
-    interface TimedPacketMatch {
-        boolean test(Packet<?> packet, String direction, long nanoTime);
-    }
-
-    private static final java.util.List<OneShotPacketListener> ONE_SHOT_RECV =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final java.util.List<OneShotPacketListener> ONE_SHOT_SEND =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final java.util.List<TimedOneShotPacketListener> TIMED_ONE_SHOT_RECV =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final java.util.List<TimedOneShotPacketListener> TIMED_ONE_SHOT_SEND =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
-
     public static OneShotPacketListener awaitReceive(java.util.function.Predicate<Packet<?>> match) {
-        return new OneShotPacketListener(ONE_SHOT_RECV, match);
+        return MacroPacketObserve.awaitReceive(match);
     }
 
     public static OneShotPacketListener awaitSend(java.util.function.Predicate<Packet<?>> match) {
-        return new OneShotPacketListener(ONE_SHOT_SEND, match);
-    }
-
-    static TimedOneShotPacketListener awaitTimedReceive(TimedPacketMatch match) {
-        return new TimedOneShotPacketListener(TIMED_ONE_SHOT_RECV, match);
-    }
-
-    static TimedOneShotPacketListener awaitTimedSend(java.util.function.Predicate<Packet<?>> match) {
-        return awaitTimedSend((packet, direction, nanoTime) -> match.test(packet));
-    }
-
-    static TimedOneShotPacketListener awaitTimedSend(TimedPacketMatch match) {
-        return new TimedOneShotPacketListener(TIMED_ONE_SHOT_SEND, match);
-    }
-
-    private static void fireOneShotObservers(java.util.List<OneShotPacketListener> list, Packet<?> packet) {
-        if (list.isEmpty()) return;
-
-        long now = System.nanoTime();
-        java.util.ArrayList<OneShotPacketListener> matched = null;
-        for (OneShotPacketListener listener : list) {
-            boolean drop;
-            try { drop = listener.offer(packet, now); }
-            catch (Throwable ignored) { drop = true; }
-            if (drop) {
-                if (matched == null) matched = new java.util.ArrayList<>(4);
-                matched.add(listener);
-            }
-        }
-        if (matched != null) list.removeAll(matched);
-    }
-
-    private static void fireTimedObservers(java.util.List<TimedOneShotPacketListener> list, MacroEvent event) {
-        if (list.isEmpty()) return;
-        java.util.ArrayList<TimedOneShotPacketListener> matched = null;
-        for (TimedOneShotPacketListener listener : list) {
-            boolean drop;
-            try { drop = listener.offer(event); }
-            catch (Throwable ignored) { drop = true; }
-            if (drop) {
-                if (matched == null) matched = new java.util.ArrayList<>(4);
-                matched.add(listener);
-            }
-        }
-        if (matched != null) list.removeAll(matched);
-    }
-
-    private static void drainOneShotListeners() {
-        for (OneShotPacketListener listener : ONE_SHOT_RECV) listener.cancel();
-        for (OneShotPacketListener listener : ONE_SHOT_SEND) listener.cancel();
-        for (TimedOneShotPacketListener listener : TIMED_ONE_SHOT_RECV) listener.cancel();
-        for (TimedOneShotPacketListener listener : TIMED_ONE_SHOT_SEND) listener.cancel();
+        return MacroPacketObserve.awaitSend(match);
     }
 
     public static String oneShotCensus() {
-        return "runs=" + getActiveRunCount()
-            + " recv=" + ONE_SHOT_RECV.size()
-            + " send=" + ONE_SHOT_SEND.size()
-            + " timedRecv=" + TIMED_ONE_SHOT_RECV.size()
-            + " timedSend=" + TIMED_ONE_SHOT_SEND.size();
+        return MacroPacketObserve.oneShotCensus();
     }
 
     public static void onPacketSent(Packet<?> packet) {
-        if (PackHideState.isHardLocked()) return;
-        if (!TIMED_ONE_SHOT_SEND.isEmpty()) {
-            fireTimedObservers(TIMED_ONE_SHOT_SEND, new MacroEvent(packet, "C2S", System.nanoTime(), null));
-        }
-        fireOneShotObservers(ONE_SHOT_SEND, packet);
-        onPacketObserved(packet, "C2S");
+        MacroPacketObserve.onPacketSent(packet);
     }
 
     public static void onPacketReceived(Packet<?> packet) {
-        if (PackHideState.isHardLocked()) return;
-        if (!TIMED_ONE_SHOT_RECV.isEmpty()) {
-            fireTimedObservers(TIMED_ONE_SHOT_RECV, new MacroEvent(packet, "S2C", System.nanoTime(), null));
-        }
-        fireOneShotObservers(ONE_SHOT_RECV, packet);
-
-        if (packet instanceof net.minecraft.network.protocol.game.ClientboundRespawnPacket
-            || packet instanceof net.minecraft.network.protocol.game.ClientboundLoginPacket) {
-            MacroConditionRegistry.onRespawnPacket();
-        }
-        if (packet instanceof net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket) {
-            MacroConditionRegistry.onTeleportPacket();
-        }
-        onPacketObserved(packet, "S2C");
+        MacroPacketObserve.onPacketReceived(packet);
     }
 
     public static void onPacketObserved(Packet<?> packet, String direction) {
-        if (PackHideState.isHardLocked()) return;
-        MacroChatObserve.syncRecentChatServerContext();
-
-        java.util.List<RunState> runs = activeRunSnapshot();
-        boolean s2c = "S2C".equals(direction);
-        boolean chatWork = false;
-        boolean mineWork = false;
-        boolean packetWork = false;
-        for (int i = 0; i < runs.size(); i++) {
-            RunState run = runs.get(i);
-            if (!run.running.get()) continue;
-            if (run.waitingForChat.get()) chatWork = true;
-            if (run.activeMineTracker != null) mineWork = true;
-            if (run.waitingForPacket.get()) packetWork = true;
-        }
-
-        if (s2c && (chatWork || isWaitingForChat.get())) {
-            ChatCapture capture = MacroChatObserve.extractIncomingChat(packet);
-            if (capture != null && capture.message() != null && !capture.message().isBlank()) {
-
-                for (RunState run : runs) {
-                    var matched = run.running.get() && run.waitingForChat.get()
-                        ? MacroChatObserve.captureChatAction(run.waitingChatAction, capture, run.variables)
-                        : java.util.Optional.<java.util.Map<String, MacroValue>>empty();
-                    if (matched.isPresent()) {
-                        run.stagedCaptures.put(run.waitingChatAction, matched.get());
-                        CompletableFuture<Void> f = run.chatFuture;
-                        if (f != null) f.complete(null);
-                    }
-                }
-                if (isCurrentRunActive() && isWaitingForChat.get() && MacroChatObserve.matchesWaitingChat(capture)) {
-                    lastMatchedChat.set(capture.displayText());
-                    CompletableFuture<Void> f = activeChatFuture;
-                    if (f != null) f.complete(null);
-                }
-            }
-        }
-
-        if (s2c && mineWork) {
-            Minecraft mc = Minecraft.getInstance();
-            for (RunState run : runs) {
-                MacroWorldActions.MineProgressTracker tracker = run.running.get() ? run.activeMineTracker : null;
-                if (tracker != null) tracker.observePacket(mc, packet);
-            }
-        }
-
-        if (!isCurrentRunActive()) return;
-
-        if (packetWork) {
-            for (RunState run : runs) {
-                if (!run.running.get() || !run.waitingForPacket.get()) continue;
-                CompletableFuture<Void> f = null;
-                synchronized (run.packetWaitLock) {
-                    if (run.waitingForPacket.get() && MacroPacketWait.matchesPacketTarget(run.waitingPacketName.get(), packet, direction)) {
-                        run.lastMatchedPacket = packet;
-                        run.lastMatchedPacketDirection = direction;
-                        f = run.packetFuture;
-                    }
-                }
-                if (f != null) f.complete(null);
-            }
-        }
-
-        if (isWaitingForPacket.get()) {
-            CompletableFuture<Void> f = null;
-            synchronized (packetWaitLock) {
-                if (!isWaitingForPacket.get()) return;
-
-                String target = waitingPacketName.get();
-                if (MacroPacketWait.matchesPacketTarget(target, packet, direction)) {
-                    lastReceivedPacket.set(direction + " " + AutismPacketNamer.getFriendlyName(packet, direction));
-                    f = activePacketFuture;
-                }
-            }
-            if (f != null) f.complete(null);
-        }
+        MacroPacketObserve.onPacketObserved(packet, direction);
     }
+
 
     public static void observeIncomingChat(Packet<?> packet) {
         MacroChatObserve.observeIncomingChat(packet);
