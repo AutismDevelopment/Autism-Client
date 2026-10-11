@@ -200,7 +200,7 @@ final class MacroCaptureAutofill {
         MacroExecutor.setCurrentStatus("Requesting command suggestions");
         PendingFetch pending = fireSuggestionFetch(connection, query, action.autofillTimeoutMs);
         if (pending == null) return;
-        if (!MacroExecutor.waitForFutureDone(pending.future(), 0)) return;
+        if (!MacroRace.waitForFutureDone(pending.future(), 0)) return;
         java.util.List<String> suggestions = pending.future().getNow(null);
         if (suggestions == null || suggestions.isEmpty()) return;
         applyCaptureSuggestions(run, action, capturePool(connection, action, query, suggestions), query);
@@ -307,7 +307,7 @@ final class MacroCaptureAutofill {
                 }
             }));
 
-            MacroExecutor.waitForFutureDone(done, 0);
+            MacroRace.waitForFutureDone(done, 0);
             if (result.get().success() || System.nanoTime() >= deadline) break;
             MacroExecutor.waitOneTick();
         }

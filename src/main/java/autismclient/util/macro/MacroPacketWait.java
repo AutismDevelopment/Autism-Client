@@ -181,7 +181,7 @@ final class MacroPacketWait {
             return true;
         });
         try {
-            if (MacroExecutor.waitForFutureDone(listener.future, 0) && run != null) MacroPrearm.commitStagedCapture(action);
+            if (MacroRace.waitForFutureDone(listener.future, 0) && run != null) MacroPrearm.commitStagedCapture(action);
         } finally {
             listener.cancel();
         }

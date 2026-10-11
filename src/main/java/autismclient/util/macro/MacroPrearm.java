@@ -102,7 +102,7 @@ final class MacroPrearm {
         MacroExecutor.PrearmedWait wait = consumePrearmedWait(action);
         if (wait == null) return false;
         try {
-            MacroExecutor.waitForFutureDone(wait.future, timeoutMs);
+            MacroRace.waitForFutureDone(wait.future, timeoutMs);
             commitStagedCapture(action);
             return true;
         } finally {
@@ -158,7 +158,7 @@ final class MacroPrearm {
             return new MacroExecutor.PrearmedWait(action, future, listener::cancel, 0);
         }
         if (action instanceof WaitForMacroStepAction macroStep) {
-            return predicatePrearm(action, () -> MacroExecutor.isMacroStepSatisfied(macroStep), macroStep.timeoutMs);
+            return predicatePrearm(action, () -> MacroRace.isMacroStepSatisfied(macroStep), macroStep.timeoutMs);
         }
         if (action instanceof WaitForLanStepAction lanStep) {
             CompletableFuture<Void> future = MacroConditionRegistry.waitForLanStep(lanStep);
@@ -166,7 +166,7 @@ final class MacroPrearm {
                 if (!future.isDone()) future.cancel(true);
             }, 0);
         }
-        CompletableFuture<?> future = MacroExecutor.raceConditionFuture(mc, action);
+        CompletableFuture<?> future = MacroRace.raceConditionFuture(mc, action);
         if (future == null) return null;
         int timeout = action instanceof WaitForChatAction chat ? chat.timeoutMs : 0;
         if (timeout > 0) future.completeOnTimeout(null, timeout, TimeUnit.MILLISECONDS);
@@ -509,7 +509,7 @@ final class MacroPrearm {
             else if (recv != null) future = recv.future;
             else return;
             if (action.timeoutMs > 0) future.completeOnTimeout(null, action.timeoutMs, TimeUnit.MILLISECONDS);
-            MacroExecutor.waitForFutureDone(future, action.timeoutMs);
+            MacroRace.waitForFutureDone(future, action.timeoutMs);
         } finally {
             if (send != null) send.cancel();
             if (recv != null) recv.cancel();
