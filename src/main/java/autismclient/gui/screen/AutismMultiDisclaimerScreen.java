@@ -41,7 +41,7 @@ public class AutismMultiDisclaimerScreen extends Screen {
     private static final String TITLE_TEXT = "[DISCLAIMER]";
 
     private static final String[] PARAGRAPHS = {
-        "AUTISM just provides the open-source software that lets you run more than one Minecraft account. That's all it does.",
+        "GEC Client provides the open-source software that lets you run more than one Minecraft account. That's all it does.",
         "What you choose to do with it is not our concern, and not our responsibility.",
         "By clicking Agree, you take full responsibility for whatever you use this feature for.",
     };

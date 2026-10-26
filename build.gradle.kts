@@ -779,7 +779,7 @@ tasks.register("buildAllTemplates") {
 
 // ---------------------------------------------------------------------------
 // LITE variant: turns the FINAL release jar (post guardian weaving) into the stripped-down
-// "AUTISM Client Lite" build in four stages, with no recompilation so the jars can never drift.
+// "GEC Client Lite" build in four stages, with no recompilation so the jars can never drift.
 // The pipeline uses NO ProGuard and NO obfuscation tooling of any kind - every stage is our own
 // code (ASM for bytecode surgery, plain zip + constant-pool analysis for shrinking):
 //   litePatchVariant - copies the full jar, patches AutismLiteVariant.ENABLED to a compile-time
@@ -2119,7 +2119,7 @@ tasks.register("verifyLiteJar") {
             }
 
             val fabricJson = entryText("fabric.mod.json")
-            if (!fabricJson.contains("\"name\":\"AUTISM Client\"")) {
+            if (!fabricJson.contains("\"name\":\"GEC Client\"")) {
                 fail("fabric.mod.json name drifted - the game title/icon must not change in lite")
             }
             if (fabricJson.contains("AutismModMenuIntegration")) {

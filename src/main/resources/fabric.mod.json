@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "autism",
   "version": "${version}",
-  "name": "AUTISM Client",
-  "description": "AUTISM Client is an elite packet, macro, and duping toolkit built for players who want total control.",
+  "name": "GEC Client",
+  "description": "GEC Client is an advanced Minecraft client focused on modules, macros, visual customization, and addon support.",
   "authors": [
     "Melonik"
   ],

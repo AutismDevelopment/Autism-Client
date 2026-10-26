@@ -53,7 +53,7 @@ public final class AddonManager {
             String modId = mod.getMetadata().getId();
             AddonReport report = ensureReport(mod.getMetadata());
             if (isDisabledOnRestart(modId)) {
-                report.markDisabled("Disabled in AUTISM config. Enable it and restart to load.");
+                report.markDisabled("Disabled in GEC Client config. Enable it and restart to load.");
                 continue;
             }
 
@@ -124,7 +124,7 @@ public final class AddonManager {
             for (String id : config.disabledAddonIds) {
                 if (id == null || id.isBlank() || REPORTS.containsKey(id)) continue;
                 AddonReport report = new AddonReport(id.trim(), id.trim(), "", "", 0xFFAA66FF);
-                report.markDisabled("Disabled in AUTISM config, but no matching addon entrypoint was discovered.");
+                report.markDisabled("Disabled in GEC Client config, but no matching addon entrypoint was discovered.");
                 REPORTS.put(report.modId(), report);
             }
         }

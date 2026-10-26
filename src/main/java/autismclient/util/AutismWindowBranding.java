@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class AutismWindowBranding {
-    public static final String WINDOW_TITLE = "AUTISM Client";
+    public static final String WINDOW_TITLE = "GEC Client";
     private static final String ICON_ROOT = "assets/autismclient/icons/window/";
     private static final int[] ICON_SIZES = {16, 32, 48, 128, 256};
 

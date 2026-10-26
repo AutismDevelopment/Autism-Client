@@ -263,7 +263,7 @@ public final class AutismCommands {
         Command command = find(first);
         String prefix = effectivePrefix();
         if (command == null) {
-            AutismClientMessaging.sendPrefixed("§cUnknown AUTISM command: §f" + first);
+            AutismClientMessaging.sendPrefixed("§cUnknown GEC command: §f" + first);
             AutismClientMessaging.sendPrefixed("§7Use §f" + prefix + "commands §7or §f" + prefix + "help§7.");
             return;
         }

@@ -870,7 +870,7 @@ public class AutismMacroListOverlay extends AutismOverlayBase {
             localSection.add(DisplayItem.localMacro(macro));
         }
         if (!localSection.isEmpty()) {
-            items.add(DisplayItem.section("AUTISM Client Macros", AutismTheme.recolor(0xFFFF5555, AutismTheme.Channel.ACCENT)));
+            items.add(DisplayItem.section("GEC Client Macros", AutismTheme.recolor(0xFFFF5555, AutismTheme.Channel.ACCENT)));
             items.addAll(localSection);
         }
 
@@ -887,7 +887,7 @@ public class AutismMacroListOverlay extends AutismOverlayBase {
         }
         if (!remoteSection.isEmpty()) {
             if (localSection.isEmpty()) {
-                items.add(DisplayItem.section("AUTISM Client Macros", AutismTheme.recolor(0xFFFF5555, AutismTheme.Channel.ACCENT)));
+                items.add(DisplayItem.section("GEC Client Macros", AutismTheme.recolor(0xFFFF5555, AutismTheme.Channel.ACCENT)));
             }
             items.addAll(remoteSection);
         }

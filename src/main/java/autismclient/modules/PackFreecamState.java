@@ -166,7 +166,7 @@ public final class PackFreecamState {
     private static net.minecraft.network.chat.Component speedMessage(double speed) {
         return net.minecraft.network.chat.Component.empty()
             .append(styled("[", autismclient.util.AutismColors.textMuted(), false))
-            .append(styled("AUTISM", autismclient.util.AutismColors.accent(), true))
+            .append(styled("GEC", autismclient.util.AutismColors.accent(), true))
             .append(styled("] ", autismclient.util.AutismColors.textMuted(), false))
             .append(styled("Freecam Speed", autismclient.util.AutismColors.packetGray(), true))
             .append(styled(": ", autismclient.util.AutismColors.textMuted(), false))

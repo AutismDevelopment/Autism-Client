@@ -16,7 +16,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -34,11 +33,6 @@ public class AutismWelcomeScreen extends Screen {
     private static final int CARD_FILL = 0xF20A0A0C;
     private static final int CARD_BORDER = 0xFFFF4A4A;
     private static final int DIVIDER_COLOR = 0x66FF4A4A;
-    private static final Identifier HUD_LOGO = Identifier.fromNamespaceAndPath("autismclient", "textures/gui/hud/autismclient_welcome.png");
-    private static final int HUD_LOGO_TEXTURE_WIDTH = 878;
-    private static final int HUD_LOGO_TEXTURE_HEIGHT = 83;
-    private static final int HUD_LOGO_DISPLAY_WIDTH = 878;
-    private static final int HUD_LOGO_DISPLAY_HEIGHT = 83;
     private static final Identifier DONATE_SUPPORT_ICON = Identifier.fromNamespaceAndPath("autismclient", "textures/gui/title/icons/donate.png");
     private static final int SUPPORT_ICON_WIDTH = 32;
     private static final int SUPPORT_ICON_HEIGHT = 32;
@@ -47,7 +41,7 @@ public class AutismWelcomeScreen extends Screen {
     private static final String TITLE_TEXT = "Thanks for using";
     private static final String[][] SECTIONS = {
         {"Donate",
-            "If AUTISM Client has helped you or made Minecraft more fun, a donation is a kind way to support the time behind it."},
+            "If GEC Client has helped you or made Minecraft more fun, a donation is a kind way to support the time behind it."},
         {"Choose Method",
             "Use Card or PayPal for the normal route, or Crypto if you want the direct one."},
     };
@@ -121,11 +115,9 @@ public class AutismWelcomeScreen extends Screen {
             int y = cardY + PAD + 2;
             drawCentered(graphics, TITLE_TEXT, FONT_TITLE, autismclient.util.AutismTheme.recolor(TITLE_COLOR, autismclient.util.AutismTheme.Channel.TEXT), x, innerW, y);
             y += UiText.fontHeight(FONT_TITLE) + 7;
-            int logoW = welcomeLogoWidth(innerW);
-            int logoH = welcomeLogoHeight(logoW);
-            int logoX = x + (innerW - logoW) / 2;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, autismclient.util.AutismThemeTextures.recolored(HUD_LOGO, autismclient.util.AutismTheme.Channel.ACCENT), logoX, y, 0.0F, 0.0F, logoW, logoH,
-                HUD_LOGO_TEXTURE_WIDTH, HUD_LOGO_TEXTURE_HEIGHT, HUD_LOGO_TEXTURE_WIDTH, HUD_LOGO_TEXTURE_HEIGHT);
+            drawCentered(graphics, "GEC CLIENT", FONT_TITLE,
+                autismclient.util.AutismTheme.recolor(HEADER_COLOR, autismclient.util.AutismTheme.Channel.ACCENT), x, innerW, y);
+            int logoH = UiText.fontHeight(FONT_TITLE);
             y += logoH + 9;
             UiRenderer.rect(graphics, UiBounds.of(x, y, innerW, 1), autismclient.util.AutismTheme.recolor(DIVIDER_COLOR, autismclient.util.AutismTheme.Channel.OUTLINE));
             y += 8;
@@ -185,8 +177,7 @@ public class AutismWelcomeScreen extends Screen {
         int headerH = UiText.fontHeight(FONT_LABEL);
         int lineH = UiText.fontHeight(FONT_LABEL) + 3;
 
-        int logoW = welcomeLogoWidth(innerW);
-        int h = PAD + UiText.fontHeight(FONT_TITLE) + 7 + welcomeLogoHeight(logoW) + 9 + 1 + 8;
+        int h = PAD + UiText.fontHeight(FONT_TITLE) + 7 + UiText.fontHeight(FONT_TITLE) + 9 + 1 + 8;
         List<List<String>> linesBySection = wrappedSections(innerW);
         for (int i = 0; i < SECTIONS.length; i++) {
             h += headerH + 3 + linesBySection.get(i).size() * lineH + 8;
@@ -248,14 +239,6 @@ public class AutismWelcomeScreen extends Screen {
     private void drawCentered(GuiGraphicsExtractor graphics, String text, Identifier fontId, int color, int x, int width, int y) {
         int textW = UiText.width(this.font, text, fontId, color);
         UiText.draw(graphics, this.font, text, fontId, color, x + (width - textW) / 2, y, false);
-    }
-
-    private static int welcomeLogoWidth(int innerW) {
-        return Math.max(170, Math.min(innerW - 18, 286));
-    }
-
-    private static int welcomeLogoHeight(int width) {
-        return Math.max(1, Math.round(width * (HUD_LOGO_DISPLAY_HEIGHT / (float) HUD_LOGO_DISPLAY_WIDTH)));
     }
 
     private void renderButton(GuiGraphicsExtractor graphics, Btn btn, float mouseX, float mouseY, boolean enabled) {

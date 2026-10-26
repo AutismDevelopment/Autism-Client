@@ -50,7 +50,6 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.util.ARGB;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.lang.reflect.Constructor;
@@ -62,11 +61,10 @@ import java.util.Locale;
 import java.util.function.Supplier;
 
 public class AutismTitleScreen extends Screen {
-    private static final Identifier LOGO = Identifier.fromNamespaceAndPath("autismclient", "textures/gui/title/autism_client_logo.png");
     private static final Identifier BUTTON_CLICK_SOUND_ID = Identifier.fromNamespaceAndPath("autismclient", "gui.main_menu_click");
     private static final SoundEvent BUTTON_CLICK_SOUND = SoundEvent.createVariableRangeEvent(BUTTON_CLICK_SOUND_ID);
-    private static final int LOGO_TEXTURE_WIDTH = 516;
-    private static final int LOGO_TEXTURE_HEIGHT = 144;
+    private static final int BRAND_CARD_WIDTH = 300;
+    private static final int BRAND_CARD_HEIGHT = 72;
     private static final Identifier TEXT_SINGLEPLAYER = buttonText("singleplayer");
     private static final Identifier TEXT_MULTIPLAYER = buttonText("multiplayer");
     private static final Identifier TEXT_REALMS = buttonText("minecraft_realms");
@@ -326,8 +324,8 @@ public class AutismTitleScreen extends Screen {
         int margin = 8;
 
         cardW = Math.min(296, Math.max(180, screenW - margin * 2));
-        cardH = Math.max(20, Math.round(LOGO_TEXTURE_HEIGHT
-            * Math.min(1.0f, (cardW - 16) / (float) LOGO_TEXTURE_WIDTH)));
+        cardH = Math.max(52, Math.round(BRAND_CARD_HEIGHT
+            * Math.min(1.0f, (cardW - 16) / (float) BRAND_CARD_WIDTH)));
         int rowW = Math.min(cardW - 28, compact ? 220 : 240);
         int rowH = compact ? 18 : 22;
         int rowGap = compact ? 3 : 5;
@@ -408,7 +406,7 @@ public class AutismTitleScreen extends Screen {
         int supportRowGap = 3;
 
         int supportIcon = Math.min(14, supportRowH - 6);
-        String[] supportLabels = {"Card/PayPal", "Crypto", "AUTISM INC", "AUTISM CLIENT"};
+        String[] supportLabels = {"Card/PayPal", "Crypto", "COMMUNITY", "GEC CLIENT"};
         int supportTextW = 0;
         for (String label : supportLabels) {
             supportTextW = Math.max(supportTextW,
@@ -630,13 +628,39 @@ public class AutismTitleScreen extends Screen {
         float p = introProgress(0);
         if (p <= 0.0f) return;
 
-        float scale = Math.min(1.0f, (cardW - 16) / (float) LOGO_TEXTURE_WIDTH);
-        int drawW = Math.max(1, Math.round(LOGO_TEXTURE_WIDTH * scale));
-        int drawH = Math.max(1, Math.round(LOGO_TEXTURE_HEIGHT * scale));
-        int logoX = UiSizing.centerInside(cardX, cardW, drawW);
-        int logoY = cardY + introOffset(p) + Math.max(0, (cardH - drawH) / 2);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, AutismThemeTextures.recolored(LOGO, Channel.ACCENT), logoX, logoY, 0.0F, 0.0F, drawW, drawH,
-            LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT, ARGB.white(p));
+        int y = cardY + introOffset(p);
+        int accent = fade(theme.color(UiTone.ACCENT), p);
+        int text = fade(theme.color(UiTone.TITLE), p);
+        boolean compact = cardH < 60;
+        UiRenderer.frame(graphics, UiBounds.of(cardX, y, cardW, cardH), fade(theme.windowFill(), p), fade(theme.borderSoft(), p));
+        UiRenderer.horizontalEdge(graphics, cardX + 1, y + 1, Math.min(18, cardW - 2), accent);
+        UiRenderer.verticalEdge(graphics, cardX + 1, y + 1, Math.min(18, cardH - 2), accent);
+        UiRenderer.horizontalEdge(graphics, cardX + cardW - Math.min(19, cardW - 1), y + 1,
+            Math.min(18, cardW - 2), accent);
+        UiRenderer.verticalEdge(graphics, cardX + cardW - 2, y + 1, Math.min(18, cardH - 2), accent);
+
+        String name = "GEC";
+        int nameWidth = UiText.width(this.font, name, UiAssets.FONT_TITLE, text);
+        UiText.draw(graphics, this.font, name, UiAssets.FONT_TITLE, text,
+            cardX + (cardW - nameWidth) / 2, y + (compact ? 6 : 10), false);
+
+        String label = "CLIENT";
+        int labelWidth = UiText.width(this.font, label, UiAssets.FONT_LABEL, accent);
+        int labelY = y + (compact ? 25 : 31);
+        int labelX = cardX + (cardW - labelWidth) / 2;
+        UiText.draw(graphics, this.font, label, UiAssets.FONT_LABEL, accent, labelX, labelY, false);
+
+        int ruleY = y + cardH - 12;
+        UiRenderer.horizontalEdge(graphics, cardX + 14, ruleY, cardW - 28, fade(theme.borderSoft(), p));
+        int sweepWidth = Math.min(24, cardW - 28);
+        int sweepTravel = Math.max(1, cardW - 28 - sweepWidth);
+        int sweepX = cardX + 14 + (int) Math.floorMod(System.nanoTime() / 12_000_000L, sweepTravel);
+        UiRenderer.horizontalEdge(graphics, sweepX, ruleY, sweepWidth, accent);
+
+        String caption = "ADVANCED CLIENT SYSTEMS";
+        int captionWidth = UiText.width(this.font, caption, UiAssets.FONT_BODY, fade(theme.color(UiTone.MUTED), p));
+        UiText.draw(graphics, this.font, caption, UiAssets.FONT_BODY, fade(theme.color(UiTone.MUTED), p),
+            cardX + (cardW - captionWidth) / 2, y + cardH - 9, false);
     }
 
     private void renderSupportPanel(GuiGraphicsExtractor graphics) {

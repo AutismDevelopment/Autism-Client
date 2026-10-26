@@ -59,7 +59,7 @@ public class AutismModMenuConfigScreen extends Screen {
     private record Hit(UiBounds bounds, Runnable onLeft, Runnable onRight) {}
 
     public AutismModMenuConfigScreen(Screen parent) {
-        super(Component.literal("AUTISM Client Settings"));
+        super(Component.literal("GEC Client Settings"));
         this.parent = parent;
         AutismConfig cfg = AutismConfig.getGlobal();
         keybinds.add(new Keybind("Module Menu", () -> cfg.keybindModuleMenu, v -> { cfg.keybindModuleMenu = v; cfg.save(); }));
@@ -98,7 +98,7 @@ public class AutismModMenuConfigScreen extends Screen {
 
             UiBounds header = UiBounds.of(px, py, panelW, HEADER_H);
             UiRenderer.rect(graphics, UiBounds.of(px + 1, py + 1, panelW - 2, HEADER_H - 1), p(0x33241A1D, Channel.HEADER));
-            drawCentered(graphics, "AUTISM Client Settings", UiAssets.FONT_TITLE, p(TEXT_COLOR, Channel.TEXT), header);
+            drawCentered(graphics, "GEC Client Settings", UiAssets.FONT_TITLE, p(TEXT_COLOR, Channel.TEXT), header);
 
             UiBounds footer = UiBounds.of(px, panel.bottom() - FOOTER_H, panelW, FOOTER_H);
             UiBounds done = UiBounds.of(px + 8, footer.y() + 6, panelW - 16, ROW_H);

@@ -292,7 +292,7 @@ public final class AutismHudManager {
             case WORLD_TIME -> "Current world day time.";
             case REAL_TIME -> "Local system time.";
             case ROTATION -> "Camera direction, yaw, and pitch.";
-            case WATERMARK -> "Movable AUTISM Client logo image.";
+            case WATERMARK -> "Movable GEC Client logo image.";
             case ARMOR -> "Equipped armor with vanilla item overlays.";
             case INVENTORY -> "Main inventory grid.";
             case ITEM_COUNTER -> "Counts a picked or held item across the inventory.";

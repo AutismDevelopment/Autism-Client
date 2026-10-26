@@ -39,8 +39,8 @@ public abstract class AutismTitleScreenSupportMixin extends Screen {
 
         autism$leftButton(Component.literal("Card/PayPal"), 4, AutismLinks.KOFI);
         autism$leftButton(Component.literal("Crypto"), 28, AutismLinks.CRYPTO_DONATE);
-        autism$leftButton(Component.literal("AUTISM INC"), 52, AutismLinks.AUTISM_INC_DISCORD);
-        autism$leftButton(Component.literal("AUTISM Client"), 76, AutismLinks.DISCORD);
+        autism$leftButton(Component.literal("COMMUNITY"), 52, AutismLinks.AUTISM_INC_DISCORD);
+        autism$leftButton(Component.literal("GEC Client"), 76, AutismLinks.DISCORD);
     }
 
     @Unique

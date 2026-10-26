@@ -21,7 +21,7 @@ import java.util.Set;
 public final class AutismClientMessaging {
     private static final Minecraft MC = Minecraft.getInstance();
     private static final long DUPLICATE_WINDOW_MS = 600L;
-    private static final String PREFIX_TEXT = "[AUTISM] ";
+    private static final String PREFIX_TEXT = "[GEC] ";
 
     private static String lastMessageKey = "";
     private static long lastMessageAtMs = 0L;
@@ -38,7 +38,7 @@ public final class AutismClientMessaging {
 
     public static void sendPrefixed(String message) {
         MutableComponent text = Component.empty()
-            .append(themedTag("AUTISM"))
+            .append(themedTag("GEC"))
             .append(buildBodyText(message));
         send(text);
     }
@@ -563,8 +563,7 @@ public final class AutismClientMessaging {
 
     private static String normalizeDuplicateKey(String message) {
         if (message == null) return "";
-        return stripLegacyCodes(normalizeLegacyFormatting(message))
-            .replace(PREFIX_TEXT, "")
+        return stripAutismPrefix(stripLegacyCodes(normalizeLegacyFormatting(message)))
             .replaceAll("\\s+", " ")
             .trim()
             .toLowerCase();

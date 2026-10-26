@@ -13,7 +13,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 
 public class PrefixCommand extends Command {
     public PrefixCommand() {
-        super("prefix", "Change the AUTISM command prefix.");
+        super("prefix", "Change the GEC Client command prefix.");
     }
 
     @Override
